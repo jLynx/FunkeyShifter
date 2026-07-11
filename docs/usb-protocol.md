@@ -51,8 +51,56 @@ Examples:
 | Chim-Chim | `FFFFFFF000000092` |
 | Speed Racer | `FFFFFFF000000093` |
 
-The captured raw endpoint mappings currently implemented are stable 7-byte hub
-packets:
+The endpoint packet is generated from the numeric decoded ID. The monitor/game
+formats that number as an 8-digit uppercase hex suffix, but the raw packet
+stores the number as decimal digits:
+
+```text
+digit 0: ones
+digit 1: tens
+digit 2: hundreds
+digit 3: checksum = (ones + tens + hundreds) % 10
+```
+
+Examples:
+
+| Name | Displayed suffix | Numeric value | Encoded decimal digits |
+| --- | --- | --- | --- |
+| Wasabi | `0000002F` | 47 | `7, 4, 0, 1` |
+| Flurry | `00000050` | 80 | `0, 8, 0, 8` |
+| Webley | `0000005C` | 92 | `2, 9, 0, 1` |
+| Chim-Chim | `00000092` | 146 | `6, 4, 1, 1` |
+| Speed Racer | `00000093` | 147 | `7, 4, 1, 2` |
+
+Each digit is represented by an ADC-like value in one of ten value buckets.
+The firmware uses a fixed baseline of `177` and bucket-center ADC values:
+
+| Digit | ADC |
+| --- | --- |
+| 0 | 278 |
+| 1 | 375 |
+| 2 | 465 |
+| 3 | 554 |
+| 4 | 643 |
+| 5 | 713 |
+| 6 | 783 |
+| 7 | 844 |
+| 8 | 899 |
+| 9 | 942 |
+
+The 7-byte raw packet packs those four 10-bit ADC values plus the baseline:
+
+```text
+byte 0: adc0 low 8 bits
+byte 1: adc1 low 8 bits
+byte 2: adc2 low 8 bits
+byte 3: adc3 low 8 bits
+byte 4: adc0..adc3 high 2 bits, packed at bit positions 0, 2, 4, 6
+byte 5: baseline low 8 bits
+byte 6: baseline high 8 bits
+```
+
+The old captured stable packets were:
 
 | Name | Decoded report | Raw endpoint packet |
 | --- | --- | --- |
@@ -63,10 +111,14 @@ packets:
 | Speed Racer | `FFFFFFF000000093` | `4D 7F 60 C4 5B B1 00` |
 
 The Flurry packet was first extracted from `usb_dump2.pcapng`. The other four
-implemented mappings were extracted from `usb_dump3.pcapng`. These raw endpoint
-packets are not the same bytes as the decoded report; the firmware translates
-the decoded EP0 report into the stable raw `0x81` packet. Removal uses the
-single no-figure raw packet `FF FF FF FF FF 00 00`.
+packets were extracted from `usb_dump3.pcapng` and used to confirm the decoder.
+Generated packets do not need to byte-match the captures; they only need to land
+inside the same digit buckets and pass the checksum. Removal uses the single
+no-figure raw packet `FF FF FF FF FF 00 00`.
+
+The raw protocol carries three decimal ID digits, so the current generated path
+supports numeric IDs `0..999`. The known list currently tops out at `00000127`
+hex, which is decimal `295`, so this covers the known figures.
 
 ## Control Requests
 
@@ -100,7 +152,7 @@ The supported live-control path is EP0 vendor control:
 
 `tools/funkey_live_control.py` uses only those EP0 requests, so it can be used
 for quick in-game switching without reading the game-facing interrupt endpoint.
-The default number keys select the five raw-captured common figures. Run
+The default number keys select five common figures. Run
 `py -3 .\tools\funkey_live_control.py --list` to print the full known decoded
 ID table.
 

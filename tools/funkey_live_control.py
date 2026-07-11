@@ -42,6 +42,7 @@ PRESETS = {
     "3": ("Wasabi", "0000002F"),
     "4": ("Chim-Chim", "00000092"),
     "5": ("Speed Racer", "00000093"),
+    "6": ("Xener Ultra Rare", "0000003A"),
 }
 
 

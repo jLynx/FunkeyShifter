@@ -59,19 +59,10 @@ static bool s_pending_raw_set = false;
 static uint8_t s_portal_ep_in = 0;
 static uint8_t s_portal_report_xfer[FUNKEY_PORTAL_PACKET_LEN];
 
-typedef struct {
-    uint32_t id;
-    uint8_t packet[FUNKEY_PORTAL_PACKET_LEN];
-} portal_figure_mapping_t;
-
 static const uint8_t s_raw_no_figure[FUNKEY_PORTAL_PACKET_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00};
-
-static const portal_figure_mapping_t s_portal_mappings[] = {
-    {0x00000050, {0xF5, 0x85, 0xF7, 0x82, 0xCC, 0xB1, 0x00}}, // Flurry
-    {0x0000005C, {0xD5, 0xB1, 0x0D, 0x74, 0x5D, 0xC9, 0x00}}, // Webley
-    {0x0000002F, {0x52, 0x84, 0x07, 0x6D, 0x5B, 0xC2, 0x00}}, // Wasabi
-    {0x00000092, {0x12, 0x84, 0x6B, 0x6C, 0x5B, 0xBF, 0x00}}, // Chim-Chim
-    {0x00000093, {0x4D, 0x7F, 0x60, 0xC4, 0x5B, 0xB1, 0x00}}, // Speed Racer
+static const uint16_t s_portal_baseline_adc = 177;
+static const uint16_t s_portal_digit_adc[10] = {
+    278, 375, 465, 554, 643, 713, 783, 844, 899, 942,
 };
 
 static uint8_t s_portal_stable_packet[FUNKEY_PORTAL_PACKET_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00};
@@ -125,19 +116,35 @@ static uint32_t report_id(const uint8_t report[FUNKEY_REPORT_LEN])
            ((uint32_t)report[6] << 8) | (uint32_t)report[7];
 }
 
-static const portal_figure_mapping_t *portal_mapping_for_id(uint32_t id)
-{
-    for (size_t i = 0; i < TU_ARRAY_SIZE(s_portal_mappings); ++i) {
-        if (s_portal_mappings[i].id == id) {
-            return &s_portal_mappings[i];
-        }
-    }
-    return NULL;
-}
-
 static void portal_set_stable_packet_locked(const uint8_t packet[FUNKEY_PORTAL_PACKET_LEN])
 {
     memcpy(s_portal_stable_packet, packet, FUNKEY_PORTAL_PACKET_LEN);
+}
+
+static bool portal_packet_from_id(uint32_t id, uint8_t out[FUNKEY_PORTAL_PACKET_LEN])
+{
+    if (id > 999) {
+        return false;
+    }
+
+    uint8_t digits[4] = {
+        id % 10,
+        (id / 10) % 10,
+        (id / 100) % 10,
+        0,
+    };
+    digits[3] = (digits[0] + digits[1] + digits[2]) % 10;
+
+    memset(out, 0, FUNKEY_PORTAL_PACKET_LEN);
+    for (size_t i = 0; i < 4; ++i) {
+        uint16_t adc = s_portal_digit_adc[digits[i]];
+        out[i] = adc & 0xFF;
+        out[4] |= ((adc >> 8) & 0x03) << (i * 2);
+    }
+
+    out[5] = s_portal_baseline_adc & 0xFF;
+    out[6] = (s_portal_baseline_adc >> 8) & 0xFF;
+    return true;
 }
 
 static void portal_packet_for_report_locked(const uint8_t report[FUNKEY_REPORT_LEN])
@@ -147,13 +154,12 @@ static void portal_packet_for_report_locked(const uint8_t report[FUNKEY_REPORT_L
         return;
     }
 
-    const portal_figure_mapping_t *mapping = portal_mapping_for_id(report_id(report));
-    if (mapping != NULL) {
-        portal_set_stable_packet_locked(mapping->packet);
-        return;
+    uint8_t packet[FUNKEY_PORTAL_PACKET_LEN];
+    if (portal_packet_from_id(report_id(report), packet)) {
+        portal_set_stable_packet_locked(packet);
+    } else {
+        portal_set_stable_packet_locked(s_raw_no_figure);
     }
-
-    portal_set_stable_packet_locked(s_raw_no_figure);
 }
 
 static void report_set(const uint8_t in[FUNKEY_REPORT_LEN])

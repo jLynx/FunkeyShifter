@@ -112,6 +112,8 @@ def build_name_table() -> dict[str, int]:
         if very_rare is not None:
             names[f"{base}vr"] = very_rare
             names[f"{base}veryrare"] = very_rare
+            names[f"{base}ur"] = very_rare
+            names[f"{base}ultrarare"] = very_rare
 
     names["speed"] = 0x93
     names["speedracergp"] = 0x93

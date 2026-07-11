@@ -27,8 +27,8 @@ your logs, for example:
 FF FF FF F0 00 00 00 5C
 ```
 
-That prints as `FFFFFFF00000005C`. The firmware maps supported decoded IDs to
-captured raw MegaByte interrupt packets on endpoint `0x81`.
+That prints as `FFFFFFF00000005C`. The firmware converts the numeric decoded
+ID into the raw MegaByte interrupt packet format on endpoint `0x81`.
 
 The removed/no-figure report is:
 
@@ -53,6 +53,12 @@ Speed Racer
 
 IDs are expanded to `FFFFFFF0` plus an 8-digit suffix. For example, `5C`
 becomes `FFFFFFF00000005C`, and `00000127` becomes `FFFFFFF000000127`.
+
+The original hub packet encoding stores the numeric ID as decimal digits plus a
+checksum, while the monitor/game displays that number as hex. For example,
+Webley is displayed as `0000005C`, but the raw packet encodes decimal `92`.
+The current encoder supports numeric IDs from `0x00000000` through decimal
+`999`, which covers the known toy IDs through `00000127`.
 
 ## Build
 
@@ -105,19 +111,21 @@ Numbered keys send a short remove pulse before the selected figure by default.
 Use `--no-pulse` to disable that, or `--pulse-delay-ms 500` to make the
 remove/place gap longer.
 
-The numbered presets currently have captured stable raw USB packets and are
-intended to work in the original game. The Python tool sends the decoded ID over
-EP0, and the firmware maps that ID to the game-facing raw packet. Run this to
-list the larger decoded ID table supported by the host tools:
+The numbered presets are shortcuts only. The Python tool sends the decoded ID
+over EP0, and the firmware derives the game-facing raw packet from that ID. Run
+this to list the larger decoded ID table supported by the host tools:
 
 ```powershell
 py .\tools\funkey_live_control.py --list
 ```
 
-Only IDs with captured raw endpoint packets are physically emulated by the
-firmware. Other decoded IDs can be parsed by the tools, but they still need the
-raw packet encoding or real-hub captures before they can work through the
-original USB path.
+Any listed ID in the supported numeric range can be emitted through the original
+USB path. You can also set one directly:
+
+```powershell
+py .\tools\funkey_live_control.py --set Webley
+py .\tools\funkey_live_control.py --set 0x127
+```
 
 For game/remake-side testing of the vendor USB interface, use the PyUSB helper:
 
