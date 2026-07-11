@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  Star,
   Unplug,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +19,7 @@ import {
   formatDisplayFunkeyId,
   formatFunkeyId,
   funkeyFamilies,
+  funkeyVariants,
   FunkeyFamily,
   FunkeyVariant,
   idFromReport,
@@ -43,6 +45,8 @@ type BusyId = number | "remove" | "custom" | "refresh" | null;
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const PULSE_REMOVE = true;
 const PULSE_DELAY = 250;
+const FAVORITE_FUNKEYS_KEY = "funkey-shifter.favorite-ids";
+const funkeyVariantById = new Map(funkeyVariants.map((variant) => [variant.id, variant]));
 
 export default function Home() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
@@ -53,6 +57,8 @@ export default function Home() {
   const [customValue, setCustomValue] = useState("");
   const [busyId, setBusyId] = useState<BusyId>(null);
   const [bluetoothReady, setBluetoothReady] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  const [favoritesLoaded, setFavoritesLoaded] = useState(false);
   const stopNotificationsRef = useRef<(() => void) | null>(null);
 
   const currentId = currentReport ? idFromReport(currentReport) : null;
@@ -60,6 +66,14 @@ export default function Home() {
   const isConnected = connectionState === "connected" && connection !== null && connection.server.connected;
 
   const filteredFamilies = useMemo(() => filterFamilies(query), [query]);
+  const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const favoriteVariants = useMemo(
+    () => favoriteIds.flatMap((id) => {
+      const variant = funkeyVariantById.get(id);
+      return variant ? [variant] : [];
+    }),
+    [favoriteIds],
+  );
 
   useEffect(() => {
     const supported = isWebBluetoothAvailable();
@@ -70,6 +84,33 @@ export default function Home() {
       setStatus("Web Bluetooth unavailable in this browser");
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const rawFavorites = window.localStorage.getItem(FAVORITE_FUNKEYS_KEY);
+      setFavoriteIds(rawFavorites ? normalizeFavoriteIds(JSON.parse(rawFavorites)) : []);
+    } catch {
+      setFavoriteIds([]);
+    } finally {
+      setFavoritesLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!favoritesLoaded) {
+      return;
+    }
+
+    try {
+      if (favoriteIds.length === 0) {
+        window.localStorage.removeItem(FAVORITE_FUNKEYS_KEY);
+      } else {
+        window.localStorage.setItem(FAVORITE_FUNKEYS_KEY, JSON.stringify(favoriteIds));
+      }
+    } catch {
+      // Favorites are a convenience only; selection should keep working if storage is unavailable.
+    }
+  }, [favoriteIds, favoritesLoaded]);
 
   useEffect(() => {
     if (!connection) {
@@ -263,6 +304,16 @@ export default function Home() {
     }
   }
 
+  function toggleFavorite(variant: FunkeyVariant) {
+    setFavoriteIds((currentIds) => {
+      if (currentIds.includes(variant.id)) {
+        return currentIds.filter((id) => id !== variant.id);
+      }
+
+      return [...currentIds, variant.id];
+    });
+  }
+
   return (
     <main className="app-shell">
       <header className="top-bar">
@@ -365,6 +416,17 @@ export default function Home() {
             </label>
           </div>
 
+          <FavoriteStrip
+            variants={favoriteVariants}
+            currentId={currentId}
+            busyId={busyId}
+            disabled={!isConnected || busyId !== null}
+            favoriteIds={favoriteIdSet}
+            loaded={favoritesLoaded}
+            onSelect={sendVariant}
+            onToggleFavorite={toggleFavorite}
+          />
+
           <div className="catalog-grid">
             {filteredFamilies.map((family) => (
               <FunkeyFamilyRow
@@ -373,13 +435,64 @@ export default function Home() {
                 currentId={currentId}
                 busyId={busyId}
                 disabled={!isConnected || busyId !== null}
+                favoriteIds={favoriteIdSet}
                 onSelect={sendVariant}
+                onToggleFavorite={toggleFavorite}
               />
             ))}
           </div>
         </section>
       </div>
     </main>
+  );
+}
+
+function FavoriteStrip({
+  variants,
+  currentId,
+  busyId,
+  disabled,
+  favoriteIds,
+  loaded,
+  onSelect,
+  onToggleFavorite,
+}: {
+  variants: FunkeyVariant[];
+  currentId: number | null;
+  busyId: BusyId;
+  disabled: boolean;
+  favoriteIds: ReadonlySet<number>;
+  loaded: boolean;
+  onSelect: (variant: FunkeyVariant) => void;
+  onToggleFavorite: (variant: FunkeyVariant) => void;
+}) {
+  return (
+    <section className="favorites-strip" aria-label="Favorite Funkeys">
+      <div className="section-title">
+        <Star size={18} />
+        <h2>Favorites</h2>
+      </div>
+
+      {variants.length > 0 ? (
+        <div className="favorite-grid">
+          {variants.map((variant) => (
+            <FunkeyVariantTile
+              key={`favorite-${variant.id}`}
+              variant={variant}
+              currentId={currentId}
+              busyId={busyId}
+              disabled={disabled}
+              isFavorite={favoriteIds.has(variant.id)}
+              compact
+              onSelect={onSelect}
+              onToggleFavorite={onToggleFavorite}
+            />
+          ))}
+        </div>
+      ) : loaded ? (
+        <p className="empty-favorites">No favorites yet</p>
+      ) : null}
+    </section>
   );
 }
 
@@ -461,13 +574,17 @@ function FunkeyFamilyRow({
   currentId,
   busyId,
   disabled,
+  favoriteIds,
   onSelect,
+  onToggleFavorite,
 }: {
   family: FunkeyFamily;
   currentId: number | null;
   busyId: BusyId;
   disabled: boolean;
+  favoriteIds: ReadonlySet<number>;
   onSelect: (variant: FunkeyVariant) => void;
+  onToggleFavorite: (variant: FunkeyVariant) => void;
 }) {
   return (
     <article className="funkey-row">
@@ -478,38 +595,85 @@ function FunkeyFamilyRow({
         </span>
       </div>
       <div className="variant-actions">
-        {family.variants.map((variant) => {
-          const active = currentId === variant.id;
-          const busy = busyId === variant.id;
-          return (
-            <button
-              className={`variant-button ${variant.rarity} ${active ? "active" : ""}`}
-              type="button"
-              key={`${variant.name}-${variant.rarity}`}
-              onClick={() => onSelect(variant)}
-              disabled={disabled}
-              title={`${variant.label} ID ${formatDisplayFunkeyId(variant.id)} (${formatFunkeyId(variant.id)})`}
-            >
-              <span>{rarityLabel(variant.rarity)}</span>
-              <small className="variant-id">ID {formatDisplayFunkeyId(variant.id)}</small>
-              {variant.imagePath ? (
-                <img
-                  className="funkey-thumb"
-                  src={variant.imagePath}
-                  alt={`${variant.label} character`}
-                  width={55}
-                  height={62}
-                  loading="lazy"
-                />
-              ) : (
-                <span className="funkey-thumb funkey-thumb-placeholder" aria-hidden="true" />
-              )}
-              {active ? <Check size={14} /> : busy ? <RefreshCw size={14} className="spin" /> : null}
-            </button>
-          );
-        })}
+        {family.variants.map((variant) => (
+          <FunkeyVariantTile
+            key={`${variant.name}-${variant.rarity}`}
+            variant={variant}
+            currentId={currentId}
+            busyId={busyId}
+            disabled={disabled}
+            isFavorite={favoriteIds.has(variant.id)}
+            onSelect={onSelect}
+            onToggleFavorite={onToggleFavorite}
+          />
+        ))}
       </div>
     </article>
+  );
+}
+
+function FunkeyVariantTile({
+  variant,
+  currentId,
+  busyId,
+  disabled,
+  isFavorite,
+  compact = false,
+  onSelect,
+  onToggleFavorite,
+}: {
+  variant: FunkeyVariant;
+  currentId: number | null;
+  busyId: BusyId;
+  disabled: boolean;
+  isFavorite: boolean;
+  compact?: boolean;
+  onSelect: (variant: FunkeyVariant) => void;
+  onToggleFavorite: (variant: FunkeyVariant) => void;
+}) {
+  const active = currentId === variant.id;
+  const busy = busyId === variant.id;
+  const favoriteLabel = isFavorite ? `Remove ${variant.label} from favorites` : `Add ${variant.label} to favorites`;
+
+  return (
+    <div className={`variant-tile ${compact ? "compact" : ""}`}>
+      <button
+        className={`variant-button ${variant.rarity} ${active ? "active" : ""}`}
+        type="button"
+        onClick={() => onSelect(variant)}
+        disabled={disabled}
+        title={`${variant.label} ID ${formatDisplayFunkeyId(variant.id)} (${formatFunkeyId(variant.id)})`}
+      >
+        <span>{rarityLabel(variant.rarity)}</span>
+        <small className="variant-id">ID {formatDisplayFunkeyId(variant.id)}</small>
+        {variant.imagePath ? (
+          <img
+            className="funkey-thumb"
+            src={variant.imagePath}
+            alt={`${variant.label} character`}
+            width={55}
+            height={62}
+            loading="lazy"
+          />
+        ) : (
+          <span className="funkey-thumb funkey-thumb-placeholder" aria-hidden="true" />
+        )}
+        {active ? (
+          <Check size={14} className="variant-status-icon" />
+        ) : busy ? (
+          <RefreshCw size={14} className="variant-status-icon spin" />
+        ) : null}
+      </button>
+      <button
+        className={`favorite-button ${isFavorite ? "active" : ""}`}
+        type="button"
+        onClick={() => onToggleFavorite(variant)}
+        aria-label={favoriteLabel}
+        title={favoriteLabel}
+      >
+        <Star size={15} />
+      </button>
+    </div>
   );
 }
 
@@ -535,6 +699,27 @@ function filterFamilies(query: string): FunkeyFamily[] {
     });
     return nameMatch || seriesMatch || variantMatch;
   });
+}
+
+function normalizeFavoriteIds(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<number>();
+  const ids: number[] = [];
+
+  for (const item of value) {
+    const id = typeof item === "number" ? item : typeof item === "string" ? Number.parseInt(item, 10) : Number.NaN;
+    if (!Number.isInteger(id) || seen.has(id) || !funkeyVariantById.has(id)) {
+      continue;
+    }
+
+    seen.add(id);
+    ids.push(id);
+  }
+
+  return ids;
 }
 
 function errorMessage(error: unknown): string {
