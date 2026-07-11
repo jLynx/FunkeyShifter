@@ -17,6 +17,7 @@ import {
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   findVariantById,
+  formatDisplayFunkeyId,
   formatFunkeyId,
   formatReport,
   funkeyFamilies,
@@ -238,7 +239,7 @@ export default function Home() {
     const id = parseFunkeyInput(customValue);
     if (id === null) {
       setConnectionState("error");
-      setStatus("Enter a known name, hex ID, or full report");
+      setStatus("Enter a known name, decimal ID, hex ID, or full report");
       return;
     }
 
@@ -258,7 +259,7 @@ export default function Home() {
       const readback = await readCurrentReport(connection);
       setCurrentReport(readback);
       setConnectionState("connected");
-      setStatus(id === 0 ? "Removed" : `Set ${formatFunkeyId(id)}`);
+      setStatus(id === 0 ? "Removed" : `Set ID ${formatDisplayFunkeyId(id)}`);
     } catch (error) {
       setConnectionState("error");
       setStatus(errorMessage(error));
@@ -310,7 +311,7 @@ export default function Home() {
         <div className="status-item">
           <span className="status-label">Current</span>
           <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
-          <small>{currentId === null ? "No report" : formatFunkeyId(currentId)}</small>
+          <small>{currentId === null ? "No report" : `ID ${formatDisplayFunkeyId(currentId)}`}</small>
         </div>
         <div className="status-item wide">
           <span className="status-label">Report</span>
@@ -350,9 +351,9 @@ export default function Home() {
               <input
                 value={customValue}
                 onChange={(event) => setCustomValue(event.target.value)}
-                placeholder="0000005C"
+                placeholder="Webley or ID 92"
                 spellCheck={false}
-                aria-label="Custom Funkey ID"
+                aria-label="Custom Funkey name or ID"
               />
               <button className="primary-button" type="submit" disabled={!isConnected || busyId !== null}>
                 <Send size={16} />
@@ -445,7 +446,6 @@ function FunkeyFamilyRow({
     <article className="funkey-row">
       <div className="funkey-name">
         <strong>{family.name}</strong>
-        <span>{family.variants.map((variant) => formatFunkeyId(variant.id)).join(" / ")}</span>
       </div>
       <div className="variant-actions">
         {family.variants.map((variant) => {
@@ -458,10 +458,22 @@ function FunkeyFamilyRow({
               key={`${variant.name}-${variant.rarity}`}
               onClick={() => onSelect(variant)}
               disabled={disabled}
-              title={`${variant.label} ${formatFunkeyId(variant.id)}`}
+              title={`${variant.label} ID ${formatDisplayFunkeyId(variant.id)} (${formatFunkeyId(variant.id)})`}
             >
               <span>{rarityLabel(variant.rarity)}</span>
-              <strong>{formatFunkeyId(variant.id)}</strong>
+              <small className="variant-id">ID {formatDisplayFunkeyId(variant.id)}</small>
+              {variant.imagePath ? (
+                <img
+                  className="funkey-thumb"
+                  src={variant.imagePath}
+                  alt={`${variant.label} character`}
+                  width={55}
+                  height={62}
+                  loading="lazy"
+                />
+              ) : (
+                <span className="funkey-thumb funkey-thumb-placeholder" aria-hidden="true" />
+              )}
               {active ? <Check size={14} /> : busy ? <RefreshCw size={14} className="spin" /> : null}
             </button>
           );
@@ -482,6 +494,7 @@ function filterFamilies(query: string): FunkeyFamily[] {
     const variantMatch = family.variants.some((variant) => {
       return (
         variant.label.toLowerCase().includes(normalized) ||
+        formatDisplayFunkeyId(variant.id).includes(normalized) ||
         formatFunkeyId(variant.id).toLowerCase().includes(normalized) ||
         variant.id.toString(16).toLowerCase().includes(normalized)
       );

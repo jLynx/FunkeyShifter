@@ -5,6 +5,7 @@ export type FunkeyVariant = {
   name: string;
   rarity: Rarity;
   label: string;
+  imagePath: string | null;
 };
 
 export type FunkeyFamily = {
@@ -87,6 +88,27 @@ const rarityLabels: Record<Rarity, string> = {
   ultraRare: "Ultra Rare",
 };
 
+const missingFunkeyImageIds = new Set<number>([
+  0xf9, // E.P. Royalton has no SWF URL in funkeys.xml.
+  0xfa, // thugFace.swf is referenced by funkeys.xml but missing from the source folder.
+]);
+
+export function formatFunkeyId(id: number): string {
+  return id.toString(16).toUpperCase().padStart(8, "0");
+}
+
+export function formatDisplayFunkeyId(id: number): string {
+  return id.toString(10);
+}
+
+export function funkeyImagePath(id: number): string | null {
+  if (missingFunkeyImageIds.has(id)) {
+    return null;
+  }
+
+  return `/funkeys/${formatFunkeyId(id)}.png`;
+}
+
 function variant(row: CatalogRow, rarity: Rarity, id: number): FunkeyVariant {
   const rarityLabel = rarityLabels[rarity];
   return {
@@ -94,6 +116,7 @@ function variant(row: CatalogRow, rarity: Rarity, id: number): FunkeyVariant {
     name: row.name,
     rarity,
     label: rarity === "common" ? row.name : `${row.name} ${rarityLabel}`,
+    imagePath: funkeyImagePath(id),
   };
 }
 
@@ -107,10 +130,6 @@ export const funkeyFamilies: FunkeyFamily[] = catalogRows.map((row) => ({
 }));
 
 export const funkeyVariants = funkeyFamilies.flatMap((family) => family.variants);
-
-export function formatFunkeyId(id: number): string {
-  return id.toString(16).toUpperCase().padStart(8, "0");
-}
 
 export function formatReport(report: Uint8Array): string {
   return Array.from(report)
@@ -194,6 +213,21 @@ export function parseFunkeyInput(value: string): number | null {
   const nameValue = nameTable.get(normalizeName(trimmed));
   if (nameValue !== undefined) {
     return nameValue;
+  }
+
+  const paddedHexValue = trimmed.match(/^[0-9a-fA-F]{8}$/);
+  if (paddedHexValue) {
+    return Number.parseInt(trimmed, 16);
+  }
+
+  const decimalValue = trimmed.match(/^(?:id\s*)?#?(\d+)$/i);
+  if (decimalValue) {
+    return Number.parseInt(decimalValue[1], 10);
+  }
+
+  const prefixedHexValue = trimmed.match(/^0x([0-9a-fA-F]{1,8})$/);
+  if (prefixedHexValue) {
+    return Number.parseInt(prefixedHexValue[1], 16);
   }
 
   const hexDigits = trimmed.replace(/[^0-9a-fA-F]/g, "");
