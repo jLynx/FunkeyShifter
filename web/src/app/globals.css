@@ -218,29 +218,11 @@ h1 {
   color: var(--danger);
 }
 
-.status-band {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) minmax(260px, 2fr) auto;
-  gap: 12px;
-  align-items: stretch;
-  margin-bottom: 18px;
-}
-
-.status-item {
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgb(255 255 255 / 78%);
-  box-shadow: var(--shadow);
-}
-
 .current-status {
   display: grid;
   grid-template-columns: 60px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  padding-block: 10px;
 }
 
 .current-status-copy {
@@ -265,37 +247,38 @@ h1 {
   opacity: 0.35;
 }
 
-.status-label {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.status-item strong,
-.status-item small {
+.current-status-copy strong,
+.current-status-copy small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-item strong {
+.current-status-copy strong {
   font-size: 15px;
 }
 
-.status-item small {
+.current-status-copy small {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
 }
 
-.mono {
-  font-family: "Cascadia Mono", "Consolas", monospace;
-  font-size: 13px;
+.current-status-message {
+  color: var(--muted);
+}
+
+.current-status-message.connected {
+  color: var(--accent-strong);
+}
+
+.current-status-message.connecting {
+  color: var(--warning);
+}
+
+.current-status-message.error {
+  color: var(--danger);
 }
 
 .content-grid {
@@ -325,6 +308,23 @@ h1 {
 
 .panel-section:last-child {
   border-bottom: 0;
+}
+
+.current-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 13px;
+}
+
+.current-panel-header .section-title {
+  margin-bottom: 0;
+}
+
+.current-panel-header .icon-button {
+  width: 38px;
+  height: 38px;
 }
 
 .section-title {
@@ -373,42 +373,6 @@ h1 {
 .search-box input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(20 124 114 / 14%);
-}
-
-.toggle-row,
-.range-row {
-  display: grid;
-  align-items: center;
-  gap: 10px;
-  color: var(--text);
-  font-size: 14px;
-}
-
-.toggle-row {
-  grid-template-columns: 18px 1fr;
-  margin-bottom: 14px;
-}
-
-.toggle-row input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-}
-
-.range-row {
-  grid-template-columns: auto 1fr 68px;
-}
-
-.range-row input {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.range-row output {
-  color: var(--muted);
-  font-family: "Cascadia Mono", "Consolas", monospace;
-  font-size: 12px;
-  text-align: right;
 }
 
 .catalog-panel {
@@ -598,17 +562,12 @@ h1 {
     justify-content: flex-start;
   }
 
-  .status-band,
   .content-grid {
     grid-template-columns: 1fr;
   }
 
   .side-panel {
     position: static;
-  }
-
-  .status-band .icon-button {
-    width: 100%;
   }
 }
 
@@ -621,8 +580,7 @@ h1 {
     grid-template-columns: 1fr;
   }
 
-  .custom-form,
-  .range-row {
+  .custom-form {
     grid-template-columns: 1fr;
   }
 

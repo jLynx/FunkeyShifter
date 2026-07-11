@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Search,
   Send,
-  SlidersHorizontal,
   Unplug,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +18,6 @@ import {
   findVariantById,
   formatDisplayFunkeyId,
   formatFunkeyId,
-  formatReport,
   funkeyFamilies,
   FunkeyFamily,
   FunkeyVariant,
@@ -30,7 +28,6 @@ import {
 } from "@/lib/funkeys";
 import {
   connectFunkeyBleDevice,
-  deviceInfo,
   disconnectFunkeyBleDevice,
   FunkeyBleConnection,
   isWebBluetoothAvailable,
@@ -45,6 +42,8 @@ type ConnectionState = "idle" | "connecting" | "connected" | "error";
 type BusyId = number | "remove" | "custom" | "refresh" | null;
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const PULSE_REMOVE = true;
+const PULSE_DELAY = 250;
 
 export default function Home() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
@@ -53,8 +52,6 @@ export default function Home() {
   const [currentReport, setCurrentReport] = useState<Uint8Array | null>(null);
   const [query, setQuery] = useState("");
   const [customValue, setCustomValue] = useState("");
-  const [pulseRemove, setPulseRemove] = useState(true);
-  const [pulseDelay, setPulseDelay] = useState(250);
   const [busyId, setBusyId] = useState<BusyId>(null);
   const [bluetoothReady, setBluetoothReady] = useState(false);
   const stopNotificationsRef = useRef<(() => void) | null>(null);
@@ -62,7 +59,6 @@ export default function Home() {
   const currentId = currentReport ? idFromReport(currentReport) : null;
   const currentVariant = findVariantById(currentId);
   const isConnected = connectionState === "connected" && connection !== null && connection.server.connected;
-  const deviceLabel = connection ? deviceInfo(connection.device) : null;
 
   const filteredFamilies = useMemo(() => filterFamilies(query), [query]);
 
@@ -114,7 +110,7 @@ export default function Home() {
       stopNotifications = await startReportNotifications(nextConnection, (report) => {
         setCurrentReport(report);
         setConnectionState("connected");
-        setStatus("Report updated");
+        setStatus("Current Funkey updated");
       });
       const report = await readCurrentReport(nextConnection);
 
@@ -191,9 +187,9 @@ export default function Home() {
 
     setBusyId(variant.id);
     try {
-      if (pulseRemove) {
+      if (PULSE_REMOVE) {
         await removeCurrentReport(connection);
-        await sleep(pulseDelay);
+        await sleep(PULSE_DELAY);
       }
 
       const report = reportFromId(variant.id);
@@ -248,9 +244,9 @@ export default function Home() {
       if (id === 0) {
         await removeCurrentReport(connection);
       } else {
-        if (pulseRemove) {
+        if (PULSE_REMOVE) {
           await removeCurrentReport(connection);
-          await sleep(pulseDelay);
+          await sleep(PULSE_DELAY);
         }
 
         await writeCurrentReport(connection, reportFromId(id));
@@ -277,7 +273,7 @@ export default function Home() {
           </div>
           <div>
             <h1>Funkey Shifter</h1>
-            <p>ESP32 Web Bluetooth control</p>
+            <p>Pick a Funkey and switch instantly</p>
           </div>
         </div>
 
@@ -302,48 +298,45 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="status-band" aria-live="polite">
-        <div className="status-item">
-          <span className="status-label">Device</span>
-          <strong>{deviceLabel ? deviceLabel.name : "None"}</strong>
-          {deviceLabel?.id ? <small>{deviceLabel.id}</small> : null}
-        </div>
-        <div className="status-item current-status">
-          {currentVariant?.imagePath ? (
-            <img
-              className="current-funkey-thumb"
-              src={currentVariant.imagePath}
-              alt={`${currentVariant.label} character`}
-              width={55}
-              height={62}
-            />
-          ) : (
-            <span className="current-funkey-thumb current-funkey-thumb-placeholder" aria-hidden="true" />
-          )}
-          <div className="current-status-copy">
-            <span className="status-label">Current</span>
-            <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
-            <small>{currentId === null ? "No report" : `ID ${formatDisplayFunkeyId(currentId)}`}</small>
-          </div>
-        </div>
-        <div className="status-item wide">
-          <span className="status-label">Report</span>
-          <strong className="mono">{currentReport ? formatReport(currentReport) : "--------"}</strong>
-          <small>{status}</small>
-        </div>
-        <button
-          className="icon-button"
-          type="button"
-          onClick={refreshStatus}
-          disabled={!isConnected || busyId !== null}
-          title="Refresh status"
-        >
-          <RefreshCw size={18} className={busyId === "refresh" ? "spin" : undefined} />
-        </button>
-      </section>
-
       <div className="content-grid">
         <aside className="side-panel">
+          <section className="panel-section current-panel" aria-live="polite">
+            <div className="current-panel-header">
+              <div className="section-title">
+                <Activity size={18} />
+                <h2>Current</h2>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={refreshStatus}
+                disabled={!isConnected || busyId !== null}
+                title="Refresh status"
+              >
+                <RefreshCw size={18} className={busyId === "refresh" ? "spin" : undefined} />
+              </button>
+            </div>
+
+            <div className="current-status">
+              {currentVariant?.imagePath ? (
+                <img
+                  className="current-funkey-thumb"
+                  src={currentVariant.imagePath}
+                  alt={`${currentVariant.label} character`}
+                  width={55}
+                  height={62}
+                />
+              ) : (
+                <span className="current-funkey-thumb current-funkey-thumb-placeholder" aria-hidden="true" />
+              )}
+              <div className="current-status-copy">
+                <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
+                <small>{currentId === null ? "No Funkey selected" : currentId === 0 ? "No figure present" : `ID ${formatDisplayFunkeyId(currentId)}`}</small>
+                <small className={`current-status-message ${connectionState}`}>{status}</small>
+              </div>
+            </div>
+          </section>
+
           <section className="panel-section">
             <div className="section-title">
               <CircleOff size={18} />
@@ -373,30 +366,6 @@ export default function Home() {
                 Send
               </button>
             </form>
-          </section>
-
-          <section className="panel-section">
-            <div className="section-title">
-              <SlidersHorizontal size={18} />
-              <h2>Switching</h2>
-            </div>
-            <label className="toggle-row">
-              <input type="checkbox" checked={pulseRemove} onChange={(event) => setPulseRemove(event.target.checked)} />
-              <span>Pulse remove</span>
-            </label>
-            <label className="range-row">
-              <span>Delay</span>
-              <input
-                type="range"
-                min="0"
-                max="1000"
-                step="25"
-                value={pulseDelay}
-                onChange={(event) => setPulseDelay(Number(event.target.value))}
-                disabled={!pulseRemove}
-              />
-              <output>{pulseDelay} ms</output>
-            </label>
           </section>
         </aside>
 
