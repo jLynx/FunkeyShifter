@@ -133,13 +133,34 @@ The portal accepts optional EP0 requests for host tools and remake code.
 | vendor OUT | `0x02` | OUT | 8 bytes | Set current report |
 | vendor OUT | `0x03` | OUT | 0 bytes | Remove current figure |
 | vendor OUT | `0x04` | OUT | 7 bytes | Debug: force a stable raw endpoint packet |
+| vendor IN | `0x05` | IN | 8 bytes | Read BLE diagnostic state |
+| vendor IN | `0x06` | IN | 8 bytes | Read portal capability flags |
+
+Capability response `0x06` is an 8-byte block:
+
+| Byte(s) | Meaning |
+| --- | --- |
+| `0..3` | ASCII magic `FSH1` |
+| `4` | Capability protocol version, currently `0x01` |
+| `5` | Feature flags |
+| `6..7` | Reserved, currently zero |
+
+Feature flags:
+
+| Bit | Meaning |
+| --- | --- |
+| `0` | Managed catalog/profile expected by the game |
+| `1` | BLE control service available |
+| `2` | Raw packet override request available |
 
 For the remake, the simplest path is:
 
 1. Open `0E4C:7288`, or the remake/private VID/PID after it changes.
 2. Claim interface 0.
 3. Optionally perform `0xA0/0x00` and expect `00 00 00 00`.
-4. Poll interrupt endpoint `0x81` for 7-byte raw hub packets.
+4. Optionally perform vendor IN `0x06` and, when the response starts with
+   `FSH1` and feature bit `0` is set, enable the managed in-game catalog.
+5. Poll interrupt endpoint `0x81` for 7-byte raw hub packets.
 
 ## Debug Host Tools
 
@@ -153,10 +174,11 @@ tools:
 - `0x40/0x02` with 8 data bytes sets the current report.
 - `0x40/0x03` with no data removes the current figure.
 - `0xC0/0x01` with length 8 reads the current report.
+- `0xC0/0x06` with length 8 reads the portal capability flags.
 
 `tools/funkey_live_control.py` is a debug helper that uses only those EP0
 requests. `tools/funkey_portal_test.py` is a reference host-side implementation
-for the init, get, set, remove, and interrupt-read paths.
+for the init, capability, get, set, remove, and interrupt-read paths.
 
 ## BLE Browser Control
 

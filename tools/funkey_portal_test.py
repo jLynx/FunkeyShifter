@@ -24,6 +24,7 @@ PORTAL_EP_IN = 0x81
 REPORT_LEN = 8
 RAW_PACKET_LEN = 7
 BLE_STATUS_LEN = 8
+CAPABILITIES_LEN = 8
 
 REQ_INIT = 0x00
 REQ_GET_REPORT = 0x01
@@ -31,6 +32,7 @@ REQ_SET_REPORT = 0x02
 REQ_REMOVE = 0x03
 REQ_SET_RAW_PACKET = 0x04
 REQ_GET_BLE_STATUS = 0x05
+REQ_GET_CAPABILITIES = 0x06
 
 TYPE_INIT_IN = 0xA0
 TYPE_VENDOR_IN = 0xC0
@@ -223,6 +225,25 @@ def format_ble_status(data: Iterable[int]) -> str:
     )
 
 
+def format_capabilities(data: Iterable[int]) -> str:
+    capabilities = bytes(data)
+    if len(capabilities) != CAPABILITIES_LEN or capabilities[:4] != b"FSH1":
+        return f"unexpected:{hex_report(capabilities)}"
+
+    flags = capabilities[5]
+    names = []
+    if flags & 0x01:
+        names.append("managed_catalog")
+    if flags & 0x02:
+        names.append("ble_control")
+    if flags & 0x04:
+        names.append("raw_packet_set")
+    if not names:
+        names.append("none")
+
+    return f"v={capabilities[4]} flags={','.join(names)} raw={hex_report(capabilities)}"
+
+
 def find_device(vid: int, pid: int):
     backend = libusb_package.get_libusb1_backend() if libusb_package else None
     try:
@@ -260,6 +281,7 @@ def main() -> int:
     parser.add_argument("--poll", type=int, default=0, metavar="N", help="Read N interrupt reports")
     parser.add_argument("--read-control", action="store_true", help="Read the current report with EP0")
     parser.add_argument("--ble-status", action="store_true", help="Read firmware BLE state with EP0")
+    parser.add_argument("--capabilities", action="store_true", help="Read firmware capability flags with EP0")
     parser.add_argument("--no-init", action="store_true", help="Skip the 0xA0/0x00 init request")
     args = parser.parse_args()
 
@@ -294,6 +316,13 @@ def main() -> int:
         except usb.core.USBError as exc:
             raise SystemExit("BLE status request failed; reflash the diagnostic firmware first") from exc
         print(f"BLE {format_ble_status(status)}")
+
+    if args.capabilities:
+        try:
+            capabilities = dev.ctrl_transfer(TYPE_VENDOR_IN, REQ_GET_CAPABILITIES, 0, 0, CAPABILITIES_LEN, timeout=1000)
+        except usb.core.USBError as exc:
+            raise SystemExit("Capabilities request failed; firmware may not support request 0x06") from exc
+        print(f"CAPS {format_capabilities(capabilities)}")
 
     if args.poll > 0:
         claim_portal_interface(dev)

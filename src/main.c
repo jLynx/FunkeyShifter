@@ -48,12 +48,19 @@
 #define FUNKEY_REQ_REMOVE 0x03
 #define FUNKEY_REQ_SET_RAW_PACKET 0x04
 #define FUNKEY_REQ_GET_BLE_STATUS 0x05
+#define FUNKEY_REQ_GET_CAPABILITIES 0x06
 
 #define FUNKEY_BLE_NAME "Funkey Shifter"
 #define FUNKEY_BLE_SHORT_NAME "Funkey"
 #define FUNKEY_BLE_CMD_SET_REPORT 0x02
 #define FUNKEY_BLE_CMD_REMOVE 0x03
 #define FUNKEY_BLE_STATUS_LEN 8
+
+#define FUNKEY_CAPABILITIES_LEN 8
+#define FUNKEY_CAP_VERSION 0x01
+#define FUNKEY_CAP_MANAGED_CATALOG 0x01
+#define FUNKEY_CAP_BLE_CONTROL 0x02
+#define FUNKEY_CAP_RAW_PACKET_SET 0x04
 
 #define TUD_FUNKEY_PORTAL_DESCRIPTOR(_itfnum, _stridx, _epin, _epsize, _interval) \
     9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0x00, 0x00, _stridx, \
@@ -80,6 +87,14 @@ static const uint16_t s_portal_digit_adc[10] = {
 };
 
 static uint8_t s_portal_stable_packet[FUNKEY_PORTAL_PACKET_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00};
+
+static const uint8_t s_capabilities_response[FUNKEY_CAPABILITIES_LEN] = {
+    'F', 'S', 'H', '1',
+    FUNKEY_CAP_VERSION,
+    FUNKEY_CAP_MANAGED_CATALOG | FUNKEY_CAP_BLE_CONTROL | FUNKEY_CAP_RAW_PACKET_SET,
+    0x00,
+    0x00,
+};
 
 // UUIDs:
 // service 8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839
@@ -668,6 +683,13 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
         return tud_control_xfer(rhport, request, ble_status_buf,
                                 request->wLength < FUNKEY_BLE_STATUS_LEN ? request->wLength : FUNKEY_BLE_STATUS_LEN);
 
+    case FUNKEY_REQ_GET_CAPABILITIES:
+        if (request->bmRequestType_bit.direction != TUSB_DIR_IN || request->wLength == 0) {
+            return false;
+        }
+        return tud_control_xfer(rhport, request, (void *)s_capabilities_response,
+                                request->wLength < FUNKEY_CAPABILITIES_LEN ? request->wLength : FUNKEY_CAPABILITIES_LEN);
+
     case FUNKEY_REQ_SET_REPORT:
         if (request->bmRequestType_bit.direction != TUSB_DIR_OUT || request->wLength != FUNKEY_REPORT_LEN) {
             return false;
@@ -778,6 +800,14 @@ static bool portal_driver_control_xfer_cb(uint8_t rhport, uint8_t stage, const t
         uint16_t len = request->wLength < FUNKEY_BLE_STATUS_LEN ? request->wLength : FUNKEY_BLE_STATUS_LEN;
         ble_status_copy(ble_status_buf);
         return tud_control_xfer(rhport, request, ble_status_buf, len);
+    }
+
+    if (request->bRequest == FUNKEY_REQ_GET_CAPABILITIES &&
+        request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR &&
+        request->bmRequestType_bit.direction == TUSB_DIR_IN &&
+        request->wLength > 0) {
+        uint16_t len = request->wLength < FUNKEY_CAPABILITIES_LEN ? request->wLength : FUNKEY_CAPABILITIES_LEN;
+        return tud_control_xfer(rhport, request, (void *)s_capabilities_response, len);
     }
 
     return false;
