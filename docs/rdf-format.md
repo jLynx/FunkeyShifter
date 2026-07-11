@@ -18,19 +18,19 @@ the same byte decoder still emits their readable text.
 Decode a file:
 
 ```powershell
-py .\tools\decode_rdf.py "C:\Users\jLynx\Documents\U.B. Funkeys\RadicaGame\data\system\funkeys.rdf" -o .\decoded\funkeys.xml
+py .\tools\decode_rdf.py ".\RadicaGame\data\system\funkeys.rdf" -o .\decoded\funkeys.xml
 ```
 
 Decode every RDF file in a folder:
 
 ```powershell
-py .\tools\decode_rdf.py "C:\Users\jLynx\Documents\U.B. Funkeys\RadicaGame\data\system" --output-dir .\decoded_rdf\system
+py .\tools\decode_rdf.py ".\RadicaGame\data\system" --output-dir .\decoded_rdf\system
 ```
 
 Regenerate the funkey ID/name exports:
 
 ```powershell
-py .\tools\decode_rdf.py "C:\Users\jLynx\Documents\U.B. Funkeys\RadicaGame\data\system\funkeys.rdf" --funkeys-csv .\docs\funkeys-rdf.csv --funkeys-tsv .\docs\funkeys-rdf.tsv
+py .\tools\decode_rdf.py ".\RadicaGame\data\system\funkeys.rdf" --funkeys-csv .\docs\funkeys-rdf.csv --funkeys-tsv .\docs\funkeys-rdf.tsv
 ```
 
 The checked-in export from `funkeys.rdf` contains 176 rows, 176 unique IDs, and

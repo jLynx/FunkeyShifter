@@ -19,7 +19,7 @@ from xml.etree import ElementTree
 from PIL import Image
 
 
-DEFAULT_SWF_DIR = Path(r"C:\Users\jLynx\Documents\U.B. Funkeys\RadicaGame\funkeys")
+DEFAULT_SWF_DIR = Path.home() / "Documents" / "U.B. Funkeys" / "RadicaGame" / "funkeys"
 DEFAULT_XML = Path("decoded_rdf/system/funkeys.xml")
 DEFAULT_OUTPUT_DIR = Path("web/public/funkeys")
 

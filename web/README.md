@@ -6,6 +6,8 @@ The browser path uses BLE so Windows can keep the USB `0E4C:7288` device bound
 to `libusbK` for the game. You do not need Zadig or a WinUSB binding for the web
 controller.
 
+Live app: [funkeyshifter.jlynx.workers.dev](https://funkeyshifter.jlynx.workers.dev/)
+
 ## Run
 
 ```powershell
@@ -31,8 +33,9 @@ Command payloads:
 - `02` plus 8 report bytes: set decoded report
 - `03`: remove current figure
 
-The report value is still the same decoded 8-byte form used by the Python tool,
-for example `FFFFFFF00000005C` for Webley and `FFFFFFF000000000` for removed.
+The report value is the decoded 8-byte form documented in
+`docs/usb-protocol.md`, for example `FFFFFFF00000005C` for Webley and
+`FFFFFFF000000000` for removed.
 
 ## Browser Notes
 

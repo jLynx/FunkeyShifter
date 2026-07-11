@@ -4,11 +4,8 @@ This project uses PlatformIO with ESP-IDF, not Arduino.
 
 ## PlatformIO
 
-If `pio` is not on `PATH`, use the local PlatformIO executable:
-
-```powershell
-C:\Users\jLynx\.platformio\penv\Scripts\pio.exe run
-```
+Use the PlatformIO extension in VS Code for the normal Build, Upload, and
+Monitor actions.
 
 The first build installs the ESP-IDF framework, compiler toolchains, CMake,
 Ninja, Python dependencies, and ESP-IDF components. That is expected.
@@ -65,18 +62,10 @@ If PlatformIO reports a flash size mismatch, change both `platformio.ini` and
 
 ## Common Fixes
 
-If the ESP-IDF Python virtual environment becomes corrupt, remove or rename:
+If the ESP-IDF Python virtual environment becomes corrupt, remove or rename the
+ESP-IDF virtual environment under your PlatformIO home directory. The next build
+recreates it.
 
-```text
-C:\Users\jLynx\.platformio\penv\.espidf-5.3.2
-```
-
-The next build recreates it.
-
-If a clean build fails on Windows because CMake scratch files are locked, rerun:
-
-```powershell
-C:\Users\jLynx\.platformio\penv\Scripts\pio.exe run
-```
-
-In this repo, a second run regenerated the partial CMake state successfully.
+If a clean build fails on Windows because CMake scratch files are locked, run
+Build again from the PlatformIO extension. In this repo, a second run
+regenerated the partial CMake state successfully.

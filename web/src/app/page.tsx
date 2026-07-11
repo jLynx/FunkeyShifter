@@ -297,44 +297,29 @@ export default function Home() {
         </div>
       </header>
 
+      <CurrentPanel
+        className="mobile-current-dock"
+        currentVariant={currentVariant}
+        currentId={currentId}
+        connectionState={connectionState}
+        status={status}
+        isConnected={isConnected}
+        busyId={busyId}
+        onRefresh={refreshStatus}
+      />
+
       <div className="content-grid">
         <aside className="side-panel">
-          <section className="panel-section current-panel" aria-live="polite">
-            <div className="current-panel-header">
-              <div className="section-title">
-                <Activity size={18} />
-                <h2>Current</h2>
-              </div>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={refreshStatus}
-                disabled={!isConnected || busyId !== null}
-                title="Refresh status"
-              >
-                <RefreshCw size={18} className={busyId === "refresh" ? "spin" : undefined} />
-              </button>
-            </div>
-
-            <div className="current-status">
-              {currentVariant?.imagePath ? (
-                <img
-                  className="current-funkey-thumb"
-                  src={currentVariant.imagePath}
-                  alt={`${currentVariant.label} character`}
-                  width={55}
-                  height={62}
-                />
-              ) : (
-                <span className="current-funkey-thumb current-funkey-thumb-placeholder" aria-hidden="true" />
-              )}
-              <div className="current-status-copy">
-                <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
-                <small>{currentId === null ? "No Funkey selected" : currentId === 0 ? "No figure present" : `ID ${formatDisplayFunkeyId(currentId)}`}</small>
-                <small className={`current-status-message ${connectionState}`}>{status}</small>
-              </div>
-            </div>
-          </section>
+          <CurrentPanel
+            className="desktop-current-panel"
+            currentVariant={currentVariant}
+            currentId={currentId}
+            connectionState={connectionState}
+            status={status}
+            isConnected={isConnected}
+            busyId={busyId}
+            onRefresh={refreshStatus}
+          />
 
           <section className="panel-section">
             <div className="section-title">
@@ -395,6 +380,67 @@ export default function Home() {
         </section>
       </div>
     </main>
+  );
+}
+
+function CurrentPanel({
+  className = "",
+  currentVariant,
+  currentId,
+  connectionState,
+  status,
+  isConnected,
+  busyId,
+  onRefresh,
+}: {
+  className?: string;
+  currentVariant: FunkeyVariant | undefined;
+  currentId: number | null;
+  connectionState: ConnectionState;
+  status: string;
+  isConnected: boolean;
+  busyId: BusyId;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className={`panel-section current-panel ${className}`.trim()} aria-live="polite">
+      <div className="current-panel-header">
+        <div className="section-title">
+          <Activity size={18} />
+          <h2>Current</h2>
+        </div>
+        <button
+          className="icon-button"
+          type="button"
+          onClick={onRefresh}
+          disabled={!isConnected || busyId !== null}
+          title="Refresh status"
+        >
+          <RefreshCw size={18} className={busyId === "refresh" ? "spin" : undefined} />
+        </button>
+      </div>
+
+      <div className="current-status">
+        {currentVariant?.imagePath ? (
+          <img
+            className="current-funkey-thumb"
+            src={currentVariant.imagePath}
+            alt={`${currentVariant.label} character`}
+            width={55}
+            height={62}
+          />
+        ) : (
+          <span className="current-funkey-thumb current-funkey-thumb-placeholder" aria-hidden="true" />
+        )}
+        <div className="current-status-copy">
+          <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
+          <small>
+            {currentId === null ? "No Funkey selected" : currentId === 0 ? "No figure present" : `ID ${formatDisplayFunkeyId(currentId)}`}
+          </small>
+          <small className={`current-status-message ${connectionState}`}>{status}</small>
+        </div>
+      </div>
+    </section>
   );
 }
 

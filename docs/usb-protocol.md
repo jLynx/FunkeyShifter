@@ -141,26 +141,22 @@ For the remake, the simplest path is:
 3. Optionally perform `0xA0/0x00` and expect `00 00 00 00`.
 4. Poll interrupt endpoint `0x81` for 7-byte raw hub packets.
 
-## Live Control While The Game Runs
+## Debug Host Tools
 
-The game should own interface 0 and poll endpoint `0x81`. A separate controller
-should not claim interface 0 at the same time.
+Normal control is handled by the Next.js Web Bluetooth app in `web/`. The game
+should own interface 0 and poll endpoint `0x81`; a separate controller should
+not claim interface 0 at the same time.
 
-The supported live-control path is EP0 vendor control:
+The firmware still exposes EP0 vendor control for development and reference
+tools:
 
 - `0x40/0x02` with 8 data bytes sets the current report.
 - `0x40/0x03` with no data removes the current figure.
 - `0xC0/0x01` with length 8 reads the current report.
 
-`tools/funkey_live_control.py` uses only those EP0 requests, so it can be used
-for quick in-game switching without reading the game-facing interrupt endpoint.
-The default number keys select a small set of test figures, including Xener
-Ultra Rare as key `6`. Run
-`py -3 .\tools\funkey_live_control.py --list` to print the full known decoded
-ID table.
-
-The repository includes `tools/funkey_portal_test.py` as a reference host-side
-implementation for the init, get, set, remove, and interrupt-read paths.
+`tools/funkey_live_control.py` is a debug helper that uses only those EP0
+requests. `tools/funkey_portal_test.py` is a reference host-side implementation
+for the init, get, set, remove, and interrupt-read paths.
 
 ## BLE Browser Control
 
