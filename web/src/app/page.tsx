@@ -3,7 +3,6 @@
 import {
   Activity,
   AlertTriangle,
-  Bluetooth,
   BluetoothConnected,
   BluetoothSearching,
   Check,
@@ -269,10 +268,10 @@ export default function Home() {
       <header className="top-bar">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            <Bluetooth size={24} strokeWidth={1.9} />
+            <img src="/brand/ub.png" alt="" width={36} height={36} />
           </div>
           <div>
-            <h1>Funkey Shifter</h1>
+            <h1>FunkeyShifter</h1>
             <p>Pick a Funkey and switch instantly</p>
           </div>
         </div>
