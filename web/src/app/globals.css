@@ -235,6 +235,36 @@ h1 {
   box-shadow: var(--shadow);
 }
 
+.current-status {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding-block: 10px;
+}
+
+.current-status-copy {
+  min-width: 0;
+}
+
+.current-funkey-thumb {
+  display: block;
+  width: 55px;
+  height: 62px;
+  object-fit: contain;
+  justify-self: center;
+  filter: drop-shadow(0 8px 9px rgb(22 34 40 / 16%));
+}
+
+.current-funkey-thumb-placeholder {
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 68%), transparent 50%),
+    var(--surface-muted);
+  opacity: 0.35;
+}
+
 .status-label {
   display: block;
   margin-bottom: 7px;
@@ -430,7 +460,8 @@ h1 {
   min-width: 0;
 }
 
-.funkey-name strong {
+.funkey-name strong,
+.funkey-series {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -439,6 +470,14 @@ h1 {
 
 .funkey-name strong {
   font-size: 15px;
+}
+
+.funkey-series {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .variant-actions {

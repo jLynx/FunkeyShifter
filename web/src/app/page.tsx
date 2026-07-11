@@ -308,10 +308,23 @@ export default function Home() {
           <strong>{deviceLabel ? deviceLabel.name : "None"}</strong>
           {deviceLabel?.id ? <small>{deviceLabel.id}</small> : null}
         </div>
-        <div className="status-item">
-          <span className="status-label">Current</span>
-          <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
-          <small>{currentId === null ? "No report" : `ID ${formatDisplayFunkeyId(currentId)}`}</small>
+        <div className="status-item current-status">
+          {currentVariant?.imagePath ? (
+            <img
+              className="current-funkey-thumb"
+              src={currentVariant.imagePath}
+              alt={`${currentVariant.label} character`}
+              width={55}
+              height={62}
+            />
+          ) : (
+            <span className="current-funkey-thumb current-funkey-thumb-placeholder" aria-hidden="true" />
+          )}
+          <div className="current-status-copy">
+            <span className="status-label">Current</span>
+            <strong>{currentVariant ? currentVariant.label : currentId === 0 ? "Removed" : "Unknown"}</strong>
+            <small>{currentId === null ? "No report" : `ID ${formatDisplayFunkeyId(currentId)}`}</small>
+          </div>
         </div>
         <div className="status-item wide">
           <span className="status-label">Report</span>
@@ -446,6 +459,9 @@ function FunkeyFamilyRow({
     <article className="funkey-row">
       <div className="funkey-name">
         <strong>{family.name}</strong>
+        <span className="funkey-series" title={`XML series ${family.seriesCode}`}>
+          {family.series}
+        </span>
       </div>
       <div className="variant-actions">
         {family.variants.map((variant) => {
@@ -491,6 +507,10 @@ function filterFamilies(query: string): FunkeyFamily[] {
 
   return funkeyFamilies.filter((family) => {
     const nameMatch = family.name.toLowerCase().includes(normalized);
+    const seriesMatch =
+      family.series.toLowerCase().includes(normalized) ||
+      `series ${family.seriesCode}`.includes(normalized) ||
+      family.seriesCode.includes(normalized);
     const variantMatch = family.variants.some((variant) => {
       return (
         variant.label.toLowerCase().includes(normalized) ||
@@ -499,7 +519,7 @@ function filterFamilies(query: string): FunkeyFamily[] {
         variant.id.toString(16).toLowerCase().includes(normalized)
       );
     });
-    return nameMatch || variantMatch;
+    return nameMatch || seriesMatch || variantMatch;
   });
 }
 

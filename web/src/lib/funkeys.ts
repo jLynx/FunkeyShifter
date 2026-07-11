@@ -10,6 +10,8 @@ export type FunkeyVariant = {
 
 export type FunkeyFamily = {
   name: string;
+  series: string;
+  seriesCode: string;
   variants: FunkeyVariant[];
 };
 
@@ -82,6 +84,81 @@ const catalogRows: CatalogRow[] = [
   { name: "Ace", common: 0x127 },
 ];
 
+const familySeries: Record<string, string> = {
+  "Ace": "5",
+  "Berger": "3",
+  "Boggle": "1",
+  "Bomble": "4",
+  "Bones": "1",
+  "Cannonball Taylor": "2.5",
+  "Chim-Chim": "2.5",
+  "Deuce": "1",
+  "Dot": "3.05",
+  "Drift": "3",
+  "Dyer": "3",
+  "E.P. Royalton": "2.51",
+  "Fallout": "1",
+  "Flurry": "2",
+  "Gabby": "3",
+  "Glub": "1",
+  "Henchman": "3.1",
+  "Holler": "3",
+  "Jerry": "3.2",
+  "Lotus": "1",
+  "Lucky": "3",
+  "Master Lox": "3.1",
+  "Maul": "5",
+  "Mayor Sayso": "3.1",
+  "Mulch": "5",
+  "Native": "3.2",
+  "Nectar": "5",
+  "Nibble": "2",
+  "Pineapple King": "3.2",
+  "Ptep": "3",
+  "Racer X": "2.5",
+  "Raj": "4",
+  "Rastro": "5",
+  "Rewind": "3",
+  "Rom": "3",
+  "Scratch": "1",
+  "Singe": "4",
+  "Snake Oiler": "2.5",
+  "Sol": "2",
+  "Speed Racer": "2.5",
+  "Speed Racer Pinball": "2.5",
+  "Snipe": "3",
+  "Sprocket": "3",
+  "Sprout": "1",
+  "Stitch": "1",
+  "Tadd": "5",
+  "Taejo": "2.5",
+  "Tank": "3",
+  "Thug": "2.51",
+  "Tiki": "1",
+  "Trixie": "2.5",
+  "Twinx": "1",
+  "Vlurp": "3",
+  "Vroom": "1",
+  "Waggs": "3",
+  "Wasabi": "1",
+  "Webley": "2",
+  "Xener": "1",
+  "Yang": "4",
+};
+
+const seriesNames: Record<string, string> = {
+  "1": "Series 1 - Funkeystown",
+  "2": "Series 2 - Funkiki Island",
+  "2.5": "Series 3 - Speed Racer",
+  "2.51": "Cancelled Adventure Packs",
+  "3": "Series 4 - Dream State: Nightmare Rift",
+  "3.05": "Series 4 - Dream State: Wave 1.5",
+  "3.1": "Series 4 - Dream State: Daydream Oasis",
+  "3.2": "Series 4 - Dream State: Daydream Oasis",
+  "4": "Series 5 - Hidden Realm",
+  "5": "Series 6 - Paradox Green",
+};
+
 const rarityLabels: Record<Rarity, string> = {
   common: "Common",
   rare: "Rare",
@@ -120,16 +197,27 @@ function variant(row: CatalogRow, rarity: Rarity, id: number): FunkeyVariant {
   };
 }
 
-export const funkeyFamilies: FunkeyFamily[] = catalogRows.map((row) => ({
-  name: row.name,
-  variants: [
-    variant(row, "common", row.common),
-    ...(row.rare === undefined ? [] : [variant(row, "rare", row.rare)]),
-    ...(row.ultraRare === undefined ? [] : [variant(row, "ultraRare", row.ultraRare)]),
-  ],
-}));
+export const funkeyFamilies: FunkeyFamily[] = catalogRows
+  .map((row) => {
+    const seriesCode = familySeries[row.name] ?? "Unknown";
+    return {
+      name: row.name,
+      series: seriesNames[seriesCode] ?? `Series ${seriesCode}`,
+      seriesCode,
+      variants: [
+        variant(row, "common", row.common),
+        ...(row.rare === undefined ? [] : [variant(row, "rare", row.rare)]),
+        ...(row.ultraRare === undefined ? [] : [variant(row, "ultraRare", row.ultraRare)]),
+      ],
+    };
+  })
+  .sort((left, right) => minFamilyId(left) - minFamilyId(right));
 
 export const funkeyVariants = funkeyFamilies.flatMap((family) => family.variants);
+
+function minFamilyId(family: FunkeyFamily): number {
+  return Math.min(...family.variants.map((variantItem) => variantItem.id));
+}
 
 export function formatReport(report: Uint8Array): string {
   return Array.from(report)
