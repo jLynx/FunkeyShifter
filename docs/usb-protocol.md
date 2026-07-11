@@ -46,6 +46,7 @@ Examples:
 | --- | --- |
 | Removed | `FFFFFFF000000000` |
 | Wasabi | `FFFFFFF00000002F` |
+| Xener Ultra Rare | `FFFFFFF00000003A` |
 | Flurry | `FFFFFFF000000050` |
 | Webley | `FFFFFFF00000005C` |
 | Chim-Chim | `FFFFFFF000000092` |
@@ -67,6 +68,7 @@ Examples:
 | Name | Displayed suffix | Numeric value | Encoded decimal digits |
 | --- | --- | --- | --- |
 | Wasabi | `0000002F` | 47 | `7, 4, 0, 1` |
+| Xener Ultra Rare | `0000003A` | 58 | `8, 5, 0, 3` |
 | Flurry | `00000050` | 80 | `0, 8, 0, 8` |
 | Webley | `0000005C` | 92 | `2, 9, 0, 1` |
 | Chim-Chim | `00000092` | 146 | `6, 4, 1, 1` |
@@ -152,9 +154,33 @@ The supported live-control path is EP0 vendor control:
 
 `tools/funkey_live_control.py` uses only those EP0 requests, so it can be used
 for quick in-game switching without reading the game-facing interrupt endpoint.
-The default number keys select five common figures. Run
+The default number keys select a small set of test figures, including Xener
+Ultra Rare as key `6`. Run
 `py -3 .\tools\funkey_live_control.py --list` to print the full known decoded
 ID table.
 
 The repository includes `tools/funkey_portal_test.py` as a reference host-side
 implementation for the init, get, set, remove, and interrupt-read paths.
+
+## BLE Browser Control
+
+The ESP32 also exposes a Web Bluetooth control path so the browser does not need
+to open the USB device or require a WinUSB driver binding on Windows.
+
+| Field | Value |
+| --- | --- |
+| Device name | `Funkey Shifter` |
+| Service UUID | `8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839` |
+| Report characteristic | `8a8f9f86-0d1c-4e54-9f54-1f2e2a94d839`, read/notify |
+| Command characteristic | `8a8f9f87-0d1c-4e54-9f54-1f2e2a94d839`, write/write without response |
+
+The report characteristic value is the same decoded 8-byte report documented
+above. Command payloads are:
+
+| Payload | Meaning |
+| --- | --- |
+| `02` plus 8 report bytes | Set current decoded report |
+| `03` | Remove current figure |
+
+The browser app in `web/` uses this BLE path. The USB interface can remain bound
+to `libusbK` for the game.

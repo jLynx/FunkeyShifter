@@ -49,6 +49,7 @@ Flurry
 Wasabi
 Chim-Chim
 Speed Racer
+Xener Ultra Rare
 ```
 
 IDs are expanded to `FFFFFFF0` plus an 8-digit suffix. For example, `5C`
@@ -83,6 +84,22 @@ Monitor:
 C:\Users\jLynx\.platformio\penv\Scripts\pio.exe device monitor
 ```
 
+## Browser Control
+
+For browser-based switching, use the Next.js Web Bluetooth app in `web/`.
+This path leaves the USB VID/PID and Windows `libusbK` binding alone for the
+game:
+
+```powershell
+cd .\web
+npm.cmd install
+npm.cmd run dev
+```
+
+Open the local URL in Chrome or Edge, click `Connect BLE`, and select
+`Funkey Shifter`. Reflash the firmware before using the web app; the BLE GATT
+service is provided by the ESP32 firmware in `src/main.c`.
+
 ## USB Host Testing
 
 For live in-game switching, use the EP0 control helper. It does not claim
@@ -102,6 +119,7 @@ Keys:
 3 Wasabi
 4 Chim-Chim
 5 Speed Racer
+6 Xener Ultra Rare
 0 remove figure
 s status
 q quit
@@ -124,6 +142,8 @@ USB path. You can also set one directly:
 
 ```powershell
 py .\tools\funkey_live_control.py --set Webley
+py .\tools\funkey_live_control.py --set 0000003A
+py .\tools\funkey_live_control.py --set "Xener Ultra Rare"
 py .\tools\funkey_live_control.py --set 0x127
 ```
 

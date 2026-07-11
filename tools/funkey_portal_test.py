@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Host-side USB tester for the FunkeyShifter portal firmware."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ try:
     import usb.core
     import usb.util
 except ImportError as exc:  # pragma: no cover - depends on host setup
-    raise SystemExit("PyUSB is required: py -m pip install pyusb libusb-package") from exc
+    raise SystemExit(f"PyUSB is required: py -m pip install pyusb libusb-package ({exc})") from exc
 
 
 # Temporary hardware-test VID/PID currently used in src/main.c.
@@ -23,12 +23,14 @@ PORTAL_INTERFACE = 0
 PORTAL_EP_IN = 0x81
 REPORT_LEN = 8
 RAW_PACKET_LEN = 7
+BLE_STATUS_LEN = 8
 
 REQ_INIT = 0x00
 REQ_GET_REPORT = 0x01
 REQ_SET_REPORT = 0x02
 REQ_REMOVE = 0x03
 REQ_SET_RAW_PACKET = 0x04
+REQ_GET_BLE_STATUS = 0x05
 
 TYPE_INIT_IN = 0xA0
 TYPE_VENDOR_IN = 0xC0
@@ -162,6 +164,65 @@ def hex_report(data: Iterable[int]) -> str:
     return "".join(f"{byte:02X}" for byte in data)
 
 
+def ble_error_name(code: int) -> str:
+    host_errors = {
+        0: "ok",
+        1: "try_again",
+        2: "already",
+        3: "invalid_argument",
+        4: "data_too_large",
+        6: "out_of_memory",
+        15: "busy",
+        21: "no_ble_address",
+        22: "host_not_synced",
+        30: "disabled",
+    }
+    hci_errors = {
+        0x07: "hci_memory_capacity_exceeded",
+        0x0C: "hci_command_disallowed",
+        0x11: "hci_unsupported_feature_or_parameter",
+        0x12: "hci_invalid_command_parameters",
+        0x3A: "hci_controller_busy",
+    }
+
+    if code in host_errors:
+        return host_errors[code]
+
+    if 0x200 <= code < 0x300:
+        return hci_errors.get(code - 0x200, f"hci_error_0x{code - 0x200:02X}")
+
+    return "unknown"
+
+
+def format_ble_status(data: Iterable[int]) -> str:
+    status = bytes(data)
+    if len(status) != BLE_STATUS_LEN or status[0] != ord("B"):
+        return f"unexpected:{hex_report(status)}"
+
+    flags = status[2]
+    names = []
+    if flags & 0x01:
+        names.append("init_ok")
+    if flags & 0x02:
+        names.append("synced")
+    if flags & 0x04:
+        names.append("advertising")
+    if flags & 0x08:
+        names.append("connected")
+    if flags & 0x10:
+        names.append("notify")
+    if not names:
+        names.append("none")
+
+    last_error = int.from_bytes(status[4:6], "little", signed=False)
+    report_handle = int.from_bytes(status[6:8], "little", signed=False)
+    return (
+        f"v={status[1]} flags={','.join(names)} "
+        f"addr_type={status[3]} last_error={last_error}({ble_error_name(last_error)}) "
+        f"report_handle=0x{report_handle:04X}"
+    )
+
+
 def find_device(vid: int, pid: int):
     backend = libusb_package.get_libusb1_backend() if libusb_package else None
     try:
@@ -198,6 +259,7 @@ def main() -> int:
     parser.add_argument("--remove", action="store_true", help="Set the no-figure report")
     parser.add_argument("--poll", type=int, default=0, metavar="N", help="Read N interrupt reports")
     parser.add_argument("--read-control", action="store_true", help="Read the current report with EP0")
+    parser.add_argument("--ble-status", action="store_true", help="Read firmware BLE state with EP0")
     parser.add_argument("--no-init", action="store_true", help="Skip the 0xA0/0x00 init request")
     args = parser.parse_args()
 
@@ -225,6 +287,13 @@ def main() -> int:
     if args.read_control:
         report = dev.ctrl_transfer(TYPE_VENDOR_IN, REQ_GET_REPORT, 0, 0, REPORT_LEN, timeout=1000)
         print(f"CONTROL {hex_report(report)}")
+
+    if args.ble_status:
+        try:
+            status = dev.ctrl_transfer(TYPE_VENDOR_IN, REQ_GET_BLE_STATUS, 0, 0, BLE_STATUS_LEN, timeout=1000)
+        except usb.core.USBError as exc:
+            raise SystemExit("BLE status request failed; reflash the diagnostic firmware first") from exc
+        print(f"BLE {format_ble_status(status)}")
 
     if args.poll > 0:
         claim_portal_interface(dev)
