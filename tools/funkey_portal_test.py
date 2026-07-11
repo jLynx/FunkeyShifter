@@ -22,11 +22,13 @@ DEFAULT_PID = 0x7288
 PORTAL_INTERFACE = 0
 PORTAL_EP_IN = 0x81
 REPORT_LEN = 8
+RAW_PACKET_LEN = 7
 
 REQ_INIT = 0x00
 REQ_GET_REPORT = 0x01
 REQ_SET_REPORT = 0x02
 REQ_REMOVE = 0x03
+REQ_SET_RAW_PACKET = 0x04
 
 TYPE_INIT_IN = 0xA0
 TYPE_VENDOR_IN = 0xC0
@@ -37,25 +39,99 @@ try:
 except ImportError:  # pragma: no cover - host-specific optional helper
     libusb_package = None
 
-NAMES = {
-    "flurry": 0x50,
-    "webley": 0x5C,
-    "wasabi": 0x2F,
-    "chimchim": 0x92,
-    "speed": 0x93,
-    "speedracer": 0x93,
-    "speedracergp": 0x93,
-}
+FUNKEY_IDS = (
+    ("Scratch", 0x47, 0x48, 0x49),
+    ("Lotus", 0x4A, 0x4B, 0x4F),
+    ("Drift", 0xAA, 0xB7, 0xC4),
+    ("Waggs", 0xAB, 0xB8, 0xC5),
+    ("Dot", 0xFC, 0xFD, 0x101),
+    ("Holler", 0xCD, None, None),
+    ("Gabby", 0xCB, None, None),
+    ("Henchman", 0xCF, None, None),
+    ("Master Lox", 0xF7, None, None),
+    ("Mayor Sayso", 0xF8, None, None),
+    ("Stitch", 0x26, 0x27, 0x28),
+    ("Deuce", 0x29, 0x2A, 0x2E),
+    ("Wasabi", 0x2F, 0x30, 0x31),
+    ("Bones", 0x32, 0x33, 0x34),
+    ("Xener", 0x35, 0x39, 0x3A),
+    ("Fallout", 0x3B, 0x3C, 0x3D),
+    ("Boggle", 0x3E, 0x3F, 0x40),
+    ("Vroom", 0x44, 0x45, 0x46),
+    ("Rom", 0xCE, None, None),
+    ("Glub", 0x14, 0x18, 0x19),
+    ("Sprout", 0x1A, 0x1B, 0x1C),
+    ("Tiki", 0x1D, 0x1E, 0x1F),
+    ("Twinx", 0x23, 0x24, 0x25),
+    ("Flurry", 0x50, 0x51, 0x52),
+    ("Nibble", 0x53, 0x54, 0x55),
+    ("Sol", 0x56, 0x5A, 0x5B),
+    ("Webley", 0x5C, 0x5D, 0x5E),
+    ("Jerry", 0xF1, None, None),
+    ("Pineapple King", 0xF2, None, None),
+    ("Native", 0xF6, None, None),
+    ("Rewind", 0xCC, None, None),
+    ("Racer X", 0x5F, 0x60, 0x61),
+    ("Trixie", 0x82, 0x83, 0x87),
+    ("Cannonball Taylor", 0x88, 0x89, 0x8A),
+    ("Snake Oiler", 0x8B, 0x8C, 0x8D),
+    ("Speed Racer Pinball", 0x8E, 0x95, 0x99),
+    ("Speed Racer", 0x93, 0x97, 0x9E),
+    ("Chim-Chim", 0x92, 0x96, 0x9D),
+    ("Taejo", 0x94, 0x98, 0x9F),
+    ("Ptep", 0xA0, 0xAD, 0xBA),
+    ("Sprocket", 0xA4, 0xB4, 0xC1),
+    ("Vlurp", 0xA8, 0xB5, 0xC2),
+    ("Snipe", 0xAC, 0xB9, 0xCA),
+    ("Dyer", 0xA1, 0xAE, 0xBE),
+    ("Lucky", 0xA2, 0xAF, 0xBF),
+    ("Tank", 0xA3, 0xB3, 0xC0),
+    ("Berger", 0xA9, 0xB6, 0xC3),
+    ("Singe", 0x102, 0x106, 0x10D),
+    ("Raj", 0x103, 0x107, 0x10E),
+    ("Yang", 0x104, 0x108, 0x10F),
+    ("Bomble", 0x105, 0x10C, 0x110),
+    ("Maul", 0x11A, 0x11E, 0x125),
+    ("Nectar", 0x119, 0x11D, 0x124),
+    ("Rastro", 0x117, 0x11B, 0x122),
+    ("Tadd", 0x118, 0x11C, 0x123),
+    ("Mulch", 0x126, None, None),
+    ("Ace", 0x127, None, None),
+)
+
+
+def build_name_table() -> dict[str, int]:
+    names: dict[str, int] = {}
+    for label, common, rare, very_rare in FUNKEY_IDS:
+        base = normalize_name(label)
+        names[base] = common
+        names[f"{base}common"] = common
+        if rare is not None:
+            names[f"{base}r"] = rare
+            names[f"{base}rare"] = rare
+        if very_rare is not None:
+            names[f"{base}vr"] = very_rare
+            names[f"{base}veryrare"] = very_rare
+
+    names["speed"] = 0x93
+    names["speedracergp"] = 0x93
+    names["speedracerpinballgp"] = 0x8E
+    names["removed"] = 0x00000000
+    names["none"] = 0x00000000
+    return names
 
 
 def normalize_name(text: str) -> str:
     return "".join(ch for ch in text.lower() if ch.isalnum())
 
 
+NAMES = build_name_table()
+
+
 def report_from_id(funkey_id: int) -> bytes:
-    if not 0 <= funkey_id <= 0xFF:
-        raise ValueError("Funkey short id must fit in one byte")
-    return bytes((0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x00, funkey_id))
+    if not 0 <= funkey_id <= 0xFFFFFFFF:
+        raise ValueError("Funkey id must fit in four bytes")
+    return bytes((0xFF, 0xFF, 0xFF, 0xF0)) + funkey_id.to_bytes(4, "big")
 
 
 def parse_report(text: str) -> bytes:
@@ -64,19 +140,20 @@ def parse_report(text: str) -> bytes:
         return report_from_id(NAMES[name])
 
     digits = "".join(ch for ch in text if ch.lower() in "0123456789abcdef")
-    if len(digits) in (3, 9, 17) and digits[0] == "0":
-        digits = digits[1:]
-
-    if len(digits) in (1, 2):
+    if 1 <= len(digits) <= 8:
         return report_from_id(int(digits, 16))
-
-    if len(digits) == 8:
-        return bytes((0xFF, 0xFF, 0xFF, 0xF0)) + bytes.fromhex(digits)
 
     if len(digits) == 16:
         return bytes.fromhex(digits)
 
-    raise ValueError("expected a known name, 1-byte id, 8-hex suffix, or 16-hex report")
+    raise ValueError("expected a known name, 1- to 8-hex id suffix, or 16-hex report")
+
+
+def parse_raw_packet(text: str) -> bytes:
+    digits = "".join(ch for ch in text if ch.lower() in "0123456789abcdef")
+    if len(digits) != RAW_PACKET_LEN * 2:
+        raise ValueError("expected 14 hex digits for a 7-byte raw portal packet")
+    return bytes.fromhex(digits)
 
 
 def hex_report(data: Iterable[int]) -> str:
@@ -115,6 +192,7 @@ def main() -> int:
     parser.add_argument("--vid", type=lambda value: int(value, 0), default=DEFAULT_VID)
     parser.add_argument("--pid", type=lambda value: int(value, 0), default=DEFAULT_PID)
     parser.add_argument("--set", metavar="FUNKEY_OR_HEX", help="Set the current report")
+    parser.add_argument("--raw-packet", metavar="HEX", help="Set a stable 7-byte raw endpoint packet")
     parser.add_argument("--remove", action="store_true", help="Set the no-figure report")
     parser.add_argument("--poll", type=int, default=0, metavar="N", help="Read N interrupt reports")
     parser.add_argument("--read-control", action="store_true", help="Read the current report with EP0")
@@ -132,6 +210,11 @@ def main() -> int:
         report = parse_report(args.set)
         dev.ctrl_transfer(TYPE_VENDOR_OUT, REQ_SET_REPORT, 0, 0, report, timeout=1000)
         print(f"SET {hex_report(report)}")
+
+    if args.raw_packet:
+        raw_packet = parse_raw_packet(args.raw_packet)
+        dev.ctrl_transfer(TYPE_VENDOR_OUT, REQ_SET_RAW_PACKET, 0, 0, raw_packet, timeout=1000)
+        print(f"RAW {hex_report(raw_packet)}")
 
     if args.remove:
         dev.ctrl_transfer(TYPE_VENDOR_OUT, REQ_REMOVE, 0, 0, b"", timeout=1000)

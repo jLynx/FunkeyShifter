@@ -39,6 +39,7 @@
 #define FUNKEY_REQ_GET_REPORT 0x01
 #define FUNKEY_REQ_SET_REPORT 0x02
 #define FUNKEY_REQ_REMOVE 0x03
+#define FUNKEY_REQ_SET_RAW_PACKET 0x04
 
 #define TUD_FUNKEY_PORTAL_DESCRIPTOR(_itfnum, _stridx, _epin, _epsize, _interval) \
     9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0x00, 0x00, _stridx, \
@@ -52,60 +53,28 @@ static volatile bool s_report_dirty = true;
 
 static uint8_t s_pending_control_report[FUNKEY_REPORT_LEN];
 static bool s_pending_control_set = false;
+static uint8_t s_pending_raw_packet[FUNKEY_PORTAL_PACKET_LEN];
+static bool s_pending_raw_set = false;
 
 static uint8_t s_portal_ep_in = 0;
 static uint8_t s_portal_report_xfer[FUNKEY_PORTAL_PACKET_LEN];
 
 typedef struct {
+    uint32_t id;
     uint8_t packet[FUNKEY_PORTAL_PACKET_LEN];
-    uint16_t delay_ms;
-} portal_packet_step_t;
+} portal_figure_mapping_t;
 
 static const uint8_t s_raw_no_figure[FUNKEY_PORTAL_PACKET_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00};
-static const uint8_t s_raw_flurry_hold[FUNKEY_PORTAL_PACKET_LEN] = {0xF5, 0x85, 0xF7, 0x82, 0xCC, 0xB1, 0x00};
 
-static const portal_packet_step_t s_raw_flurry_sequence[] = {
-    {{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xB2, 0x00}, 8},
-    {{0xF7, 0xFF, 0xFF, 0xFF, 0xFC, 0xB2, 0x00}, 56},
-    {{0xF7, 0x82, 0xFF, 0xFF, 0xFC, 0xB2, 0x00}, 8},
-    {{0xF7, 0x82, 0xF7, 0xFF, 0xCC, 0xB2, 0x00}, 16},
-    {{0xF7, 0x82, 0xF7, 0x82, 0xCC, 0xB2, 0x00}, 48},
-    {{0xF7, 0x82, 0xF7, 0x82, 0xCC, 0xAE, 0x00}, 160},
-    {{0xF7, 0x8F, 0xF7, 0x82, 0xCC, 0xAE, 0x00}, 32},
-    {{0xF7, 0x8F, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 96},
-    {{0xF7, 0x89, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 136},
-    {{0xF7, 0x84, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 304},
-    {{0xF7, 0x88, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 168},
-    {{0xF7, 0xFF, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 8},
-    {{0xF7, 0xFF, 0xED, 0x82, 0xCC, 0xB1, 0x00}, 56},
-    {{0xF7, 0xFF, 0xED, 0x82, 0xCC, 0xA7, 0x00}, 16},
-    {{0xEE, 0xFF, 0xED, 0x82, 0xCC, 0xA7, 0x00}, 128},
-    {{0xF5, 0xFF, 0xED, 0x82, 0xCC, 0xA7, 0x00}, 176},
-    {{0xF5, 0x81, 0xED, 0x82, 0xCC, 0xA7, 0x00}, 8},
-    {{0xF5, 0x81, 0xF7, 0x82, 0xCC, 0xA7, 0x00}, 24},
-    {{0xF5, 0x81, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 104},
-    {{0xF5, 0x96, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 136},
-    {{0xF5, 0xA0, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 56},
-    {{0xF5, 0x88, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 384},
-    {{0xF5, 0x8B, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 192},
-    {{0xF5, 0x85, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 250},
-};
-
-static const portal_packet_step_t s_raw_remove_sequence[] = {
-    {{0xF5, 0xFF, 0xF7, 0x82, 0xCC, 0xB1, 0x00}, 8},
-    {{0xF5, 0xFF, 0xED, 0x82, 0xCC, 0xB1, 0x00}, 64},
-    {{0xF5, 0xFF, 0xED, 0xFF, 0xCC, 0xB1, 0x00}, 8},
-    {{0xF5, 0xFF, 0xED, 0xFF, 0xCC, 0x00, 0x00}, 8},
-    {{0xFF, 0xFF, 0xED, 0xFF, 0xCF, 0x00, 0x00}, 24},
-    {{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00}, 10},
+static const portal_figure_mapping_t s_portal_mappings[] = {
+    {0x00000050, {0xF5, 0x85, 0xF7, 0x82, 0xCC, 0xB1, 0x00}}, // Flurry
+    {0x0000005C, {0xD5, 0xB1, 0x0D, 0x74, 0x5D, 0xC9, 0x00}}, // Webley
+    {0x0000002F, {0x52, 0x84, 0x07, 0x6D, 0x5B, 0xC2, 0x00}}, // Wasabi
+    {0x00000092, {0x12, 0x84, 0x6B, 0x6C, 0x5B, 0xBF, 0x00}}, // Chim-Chim
+    {0x00000093, {0x4D, 0x7F, 0x60, 0xC4, 0x5B, 0xB1, 0x00}}, // Speed Racer
 };
 
 static uint8_t s_portal_stable_packet[FUNKEY_PORTAL_PACKET_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00};
-static const portal_packet_step_t *s_portal_sequence = NULL;
-static size_t s_portal_sequence_len = 0;
-static size_t s_portal_sequence_index = 0;
-static bool s_portal_sequence_loop = false;
-static TickType_t s_portal_next_send = 0;
 
 static const tusb_desc_device_t s_device_descriptor = {
     .bLength = sizeof(tusb_desc_device_t),
@@ -150,39 +119,48 @@ static bool report_is_removed(const uint8_t report[FUNKEY_REPORT_LEN])
     return memcmp(report, removed, FUNKEY_REPORT_LEN) == 0;
 }
 
-static void portal_sequence_start_locked(const portal_packet_step_t *sequence, size_t sequence_len,
-                                         const uint8_t stable_packet[FUNKEY_PORTAL_PACKET_LEN], bool loop)
+static uint32_t report_id(const uint8_t report[FUNKEY_REPORT_LEN])
 {
-    if (stable_packet != NULL) {
-        memcpy(s_portal_stable_packet, stable_packet, FUNKEY_PORTAL_PACKET_LEN);
-    }
-    s_portal_sequence = sequence;
-    s_portal_sequence_len = sequence_len;
-    s_portal_sequence_index = 0;
-    s_portal_sequence_loop = loop;
-    s_portal_next_send = 0;
+    return ((uint32_t)report[4] << 24) | ((uint32_t)report[5] << 16) |
+           ((uint32_t)report[6] << 8) | (uint32_t)report[7];
 }
 
-static void portal_sequence_for_report_locked(const uint8_t report[FUNKEY_REPORT_LEN])
+static const portal_figure_mapping_t *portal_mapping_for_id(uint32_t id)
+{
+    for (size_t i = 0; i < TU_ARRAY_SIZE(s_portal_mappings); ++i) {
+        if (s_portal_mappings[i].id == id) {
+            return &s_portal_mappings[i];
+        }
+    }
+    return NULL;
+}
+
+static void portal_set_stable_packet_locked(const uint8_t packet[FUNKEY_PORTAL_PACKET_LEN])
+{
+    memcpy(s_portal_stable_packet, packet, FUNKEY_PORTAL_PACKET_LEN);
+}
+
+static void portal_packet_for_report_locked(const uint8_t report[FUNKEY_REPORT_LEN])
 {
     if (report_is_removed(report)) {
-        portal_sequence_start_locked(s_raw_remove_sequence, TU_ARRAY_SIZE(s_raw_remove_sequence), s_raw_no_figure, false);
+        portal_set_stable_packet_locked(s_raw_no_figure);
         return;
     }
 
-    if (report[7] == 0x50) {
-        portal_sequence_start_locked(s_raw_flurry_sequence, TU_ARRAY_SIZE(s_raw_flurry_sequence), s_raw_flurry_hold, true);
+    const portal_figure_mapping_t *mapping = portal_mapping_for_id(report_id(report));
+    if (mapping != NULL) {
+        portal_set_stable_packet_locked(mapping->packet);
         return;
     }
 
-    portal_sequence_start_locked(NULL, 0, s_raw_no_figure, false);
+    portal_set_stable_packet_locked(s_raw_no_figure);
 }
 
 static void report_set(const uint8_t in[FUNKEY_REPORT_LEN])
 {
     portENTER_CRITICAL(&s_report_mux);
     memcpy(s_current_report, in, FUNKEY_REPORT_LEN);
-    portal_sequence_for_report_locked(in);
+    portal_packet_for_report_locked(in);
     s_report_dirty = true;
     portEXIT_CRITICAL(&s_report_mux);
 }
@@ -193,37 +171,22 @@ static void report_remove(void)
     report_set(removed);
 }
 
+static void portal_set_raw_packet(const uint8_t packet[FUNKEY_PORTAL_PACKET_LEN])
+{
+    portENTER_CRITICAL(&s_report_mux);
+    portal_set_stable_packet_locked(packet);
+    s_report_dirty = true;
+    portEXIT_CRITICAL(&s_report_mux);
+}
+
 static bool send_portal_report(void)
 {
     if (!tud_mounted() || s_portal_ep_in == 0 || usbd_edpt_busy(0, s_portal_ep_in)) {
         return false;
     }
 
-    TickType_t now = xTaskGetTickCount();
     portENTER_CRITICAL(&s_report_mux);
-    if (s_portal_next_send != 0 && (int32_t)(now - s_portal_next_send) < 0) {
-        portEXIT_CRITICAL(&s_report_mux);
-        return false;
-    }
-
-    uint16_t delay_ms = 10;
-    if (s_portal_sequence != NULL && s_portal_sequence_index < s_portal_sequence_len) {
-        const portal_packet_step_t *step = &s_portal_sequence[s_portal_sequence_index++];
-        memcpy(s_portal_report_xfer, step->packet, FUNKEY_PORTAL_PACKET_LEN);
-        delay_ms = step->delay_ms;
-        if (s_portal_sequence_index >= s_portal_sequence_len) {
-            if (s_portal_sequence_loop) {
-                s_portal_sequence_index = 0;
-            } else {
-                s_portal_sequence = NULL;
-                s_portal_sequence_len = 0;
-                s_portal_sequence_index = 0;
-            }
-        }
-    } else {
-        memcpy(s_portal_report_xfer, s_portal_stable_packet, FUNKEY_PORTAL_PACKET_LEN);
-    }
-    s_portal_next_send = now + pdMS_TO_TICKS(delay_ms);
+    memcpy(s_portal_report_xfer, s_portal_stable_packet, FUNKEY_PORTAL_PACKET_LEN);
     portEXIT_CRITICAL(&s_report_mux);
 
     if (usbd_edpt_busy(0, s_portal_ep_in) || !usbd_edpt_claim(0, s_portal_ep_in)) {
@@ -246,6 +209,12 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
     if (stage == CONTROL_STAGE_ACK && s_pending_control_set) {
         s_pending_control_set = false;
         report_set(s_pending_control_report);
+        return true;
+    }
+
+    if (stage == CONTROL_STAGE_ACK && s_pending_raw_set) {
+        s_pending_raw_set = false;
+        portal_set_raw_packet(s_pending_raw_packet);
         return true;
     }
 
@@ -286,6 +255,13 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
         }
         report_remove();
         return tud_control_status(rhport, request);
+
+    case FUNKEY_REQ_SET_RAW_PACKET:
+        if (request->bmRequestType_bit.direction != TUSB_DIR_OUT || request->wLength != FUNKEY_PORTAL_PACKET_LEN) {
+            return false;
+        }
+        s_pending_raw_set = true;
+        return tud_control_xfer(rhport, request, s_pending_raw_packet, FUNKEY_PORTAL_PACKET_LEN);
 
     default:
         return false;

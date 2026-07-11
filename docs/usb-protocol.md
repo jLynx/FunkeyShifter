@@ -49,11 +49,24 @@ Examples:
 | Flurry | `FFFFFFF000000050` |
 | Webley | `FFFFFFF00000005C` |
 | Chim-Chim | `FFFFFFF000000092` |
-| Speed Racer GP | `FFFFFFF000000093` |
+| Speed Racer | `FFFFFFF000000093` |
 
-The only raw mapping currently captured is Flurry. Its raw endpoint `0x81`
-sequence was extracted from `usb_dump2.pcapng` and is replayed by the firmware
-when the decoded control report is `FFFFFFF000000050`.
+The captured raw endpoint mappings currently implemented are stable 7-byte hub
+packets:
+
+| Name | Decoded report | Raw endpoint packet |
+| --- | --- | --- |
+| Flurry | `FFFFFFF000000050` | `F5 85 F7 82 CC B1 00` |
+| Webley | `FFFFFFF00000005C` | `D5 B1 0D 74 5D C9 00` |
+| Wasabi | `FFFFFFF00000002F` | `52 84 07 6D 5B C2 00` |
+| Chim-Chim | `FFFFFFF000000092` | `12 84 6B 6C 5B BF 00` |
+| Speed Racer | `FFFFFFF000000093` | `4D 7F 60 C4 5B B1 00` |
+
+The Flurry packet was first extracted from `usb_dump2.pcapng`. The other four
+implemented mappings were extracted from `usb_dump3.pcapng`. These raw endpoint
+packets are not the same bytes as the decoded report; the firmware translates
+the decoded EP0 report into the stable raw `0x81` packet. Removal uses the
+single no-figure raw packet `FF FF FF FF FF 00 00`.
 
 ## Control Requests
 
@@ -65,6 +78,7 @@ The portal accepts optional EP0 requests for host tools and remake code.
 | vendor IN | `0x01` | IN | 8 bytes | Read current report |
 | vendor OUT | `0x02` | OUT | 8 bytes | Set current report |
 | vendor OUT | `0x03` | OUT | 0 bytes | Remove current figure |
+| vendor OUT | `0x04` | OUT | 7 bytes | Debug: force a stable raw endpoint packet |
 
 For the remake, the simplest path is:
 
@@ -86,6 +100,9 @@ The supported live-control path is EP0 vendor control:
 
 `tools/funkey_live_control.py` uses only those EP0 requests, so it can be used
 for quick in-game switching without reading the game-facing interrupt endpoint.
+The default number keys select the five raw-captured common figures. Run
+`py -3 .\tools\funkey_live_control.py --list` to print the full known decoded
+ID table.
 
 The repository includes `tools/funkey_portal_test.py` as a reference host-side
 implementation for the init, get, set, remove, and interrupt-read paths.

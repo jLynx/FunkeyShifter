@@ -36,26 +36,23 @@ The removed/no-figure report is:
 FF FF FF F0 00 00 00 00
 ```
 
-## Serial Commands
+## Decoded IDs
 
-Open the CDC serial port at `115200` baud. Baud rate is not significant for USB
-CDC, but the monitor is configured that way.
+Host tools can set the current decoded report by name or by hex ID:
 
 ```text
-HELP
-STATUS
-REMOVE
 SET FFFFFFF00000005C
 SET 5C
 SET 0x5C
-FUNKEY Webley
-FUNKEY Flurry
-FUNKEY Wasabi
-FUNKEY Chim-Chim
-FUNKEY Speed Racer GP
+Webley
+Flurry
+Wasabi
+Chim-Chim
+Speed Racer
 ```
 
-Short IDs are expanded to `FFFFFFF0000000xx`.
+IDs are expanded to `FFFFFFF0` plus an 8-digit suffix. For example, `5C`
+becomes `FFFFFFF00000005C`, and `00000127` becomes `FFFFFFF000000127`.
 
 ## Build
 
@@ -98,7 +95,7 @@ Keys:
 2 Webley
 3 Wasabi
 4 Chim-Chim
-5 Speed Racer GP
+5 Speed Racer
 0 remove figure
 s status
 q quit
@@ -108,8 +105,19 @@ Numbered keys send a short remove pulse before the selected figure by default.
 Use `--no-pulse` to disable that, or `--pulse-delay-ms 500` to make the
 remove/place gap longer.
 
-Only Flurry currently has a captured real raw USB sequence. The other preset
-keys still need real-hub captures before they can work in the original game.
+The numbered presets currently have captured stable raw USB packets and are
+intended to work in the original game. The Python tool sends the decoded ID over
+EP0, and the firmware maps that ID to the game-facing raw packet. Run this to
+list the larger decoded ID table supported by the host tools:
+
+```powershell
+py .\tools\funkey_live_control.py --list
+```
+
+Only IDs with captured raw endpoint packets are physically emulated by the
+firmware. Other decoded IDs can be parsed by the tools, but they still need the
+raw packet encoding or real-hub captures before they can work through the
+original USB path.
 
 For game/remake-side testing of the vendor USB interface, use the PyUSB helper:
 
