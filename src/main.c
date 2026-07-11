@@ -29,11 +29,6 @@
 #include "tusb.h"
 #include "tusb_config.h"
 
-// Commented out temporarily for validation testing with other pid/vid
-// #define FUNKEY_USB_VID 0x1209
-// #define FUNKEY_USB_PID 0x0001
-// #define FUNKEY_USB_VID 0x0E4B
-// #define FUNKEY_USB_PID 0x301A
 #define FUNKEY_USB_VID 0x0E4C
 #define FUNKEY_USB_PID 0x7288
 #define FUNKEY_BCD_DEVICE 0x0100
