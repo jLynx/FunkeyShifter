@@ -1,12 +1,12 @@
-# FunkeyShifter
+# 🎮 [FunkeyShifter](https://funkeyshifter.jlynx.workers.dev/)
+
+[![FunkeyShifter Live](https://img.shields.io/badge/Live-funkeyshifter.jlynx.workers.dev-success?style=for-the-badge&logo=cloudflare)](https://funkeyshifter.jlynx.workers.dev/)
+[![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Firmware-red?style=for-the-badge&logo=espressif)](docs/toolchain.md)
+[![Web Bluetooth](https://img.shields.io/badge/Web%20Bluetooth-Controller-blue?style=for-the-badge&logo=bluetooth)](docs/usb-protocol.md)
 
 FunkeyShifter is an ESP32-S3 remake portal for U.B. Funkeys. It lets the game
 see a MegaByte-style USB hub while a browser controls which Funkey is currently
 present.
-
-Use the live controller here:
-
-[funkeyshifter.jlynx.workers.dev](https://funkeyshifter.jlynx.workers.dev/)
 
 ## What It Does
 
