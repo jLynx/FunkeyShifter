@@ -14,6 +14,7 @@
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "host/ble_gap.h"
@@ -28,6 +29,8 @@
 #include "os/os_mbuf.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+#include "soc/rtc_cntl_reg.h"
+#include "soc/soc.h"
 #include "tinyusb.h"
 #include "tinyusb_default_config.h"
 #include "tusb.h"
@@ -178,6 +181,36 @@
 #endif
 #endif
 
+#ifndef FUNKEY_FLASH_HOTKEY_ENABLED
+#define FUNKEY_FLASH_HOTKEY_ENABLED 1
+#endif
+#ifndef FUNKEY_FLASH_HOTKEY_GPIO
+#if FUNKEY_PHYSICAL_ENABLED
+#define FUNKEY_FLASH_HOTKEY_GPIO FUNKEY_PHYSICAL_PAD2_R4_GPIO
+#else
+#define FUNKEY_FLASH_HOTKEY_GPIO GPIO_NUM_8
+#endif
+#endif
+#ifndef FUNKEY_FLASH_HOTKEY_HOLD_MS
+#define FUNKEY_FLASH_HOTKEY_HOLD_MS 250U
+#endif
+#ifndef FUNKEY_FLASH_HOTKEY_SAMPLE_MS
+#define FUNKEY_FLASH_HOTKEY_SAMPLE_MS 10U
+#endif
+#ifndef FUNKEY_FLASH_HOTKEY_ADC_MAX_RAW
+#define FUNKEY_FLASH_HOTKEY_ADC_MAX_RAW 8U
+#endif
+#ifndef FUNKEY_FLASH_HOTKEY_ADC_SAMPLE_COUNT
+#define FUNKEY_FLASH_HOTKEY_ADC_SAMPLE_COUNT 4U
+#endif
+#ifndef FUNKEY_FLASH_HOTKEY_ADC_ATTEN
+#if FUNKEY_PHYSICAL_ENABLED
+#define FUNKEY_FLASH_HOTKEY_ADC_ATTEN FUNKEY_PHYSICAL_ADC_ATTEN
+#else
+#define FUNKEY_FLASH_HOTKEY_ADC_ATTEN ADC_ATTEN_DB_12
+#endif
+#endif
+
 #define TUD_FUNKEY_PORTAL_DESCRIPTOR(_itfnum, _stridx, _epin, _epsize, _interval) \
     9, TUSB_DESC_INTERFACE, _itfnum, 0, 1, TUSB_CLASS_VENDOR_SPECIFIC, 0x00, 0x00, _stridx, \
     7, TUSB_DESC_ENDPOINT, _epin, TUSB_XFER_INTERRUPT, U16_TO_U8S_LE(_epsize), _interval
@@ -189,6 +222,7 @@ static const uint8_t s_removed_report[FUNKEY_REPORT_LEN] = {0xFF, 0xFF, 0xFF, 0x
 static uint8_t s_current_report[FUNKEY_REPORT_LEN] = {0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00};
 static volatile bool s_report_dirty = true;
 #if FUNKEY_PHYSICAL_ENABLED
+static const uint8_t s_physical_contact_issue_report[FUNKEY_REPORT_LEN] = {0xFF, 0xFF, 0xFF, 0xF1, 0x00, 0x00, 0x00, 0x01};
 static uint8_t s_physical_report[FUNKEY_REPORT_LEN] = {0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00};
 #endif
 
@@ -214,6 +248,7 @@ static const uint32_t s_funkey_digit_resistor_ohms[10] = {
 typedef enum {
     PHYSICAL_STATE_INVALID = 0,
     PHYSICAL_STATE_REMOVED,
+    PHYSICAL_STATE_CONTACT_ISSUE,
     PHYSICAL_STATE_PRESENT,
 } physical_state_type_t;
 
@@ -265,6 +300,128 @@ static const uint8_t s_capabilities_response[FUNKEY_CAPABILITIES_LEN] = {
     0x00,
     0x00,
 };
+
+#if FUNKEY_FLASH_HOTKEY_ENABLED
+static esp_err_t flash_hotkey_read_raw(uint16_t *out_raw)
+{
+    adc_unit_t unit_id;
+    adc_channel_t channel;
+    esp_err_t err = adc_oneshot_io_to_channel((int)FUNKEY_FLASH_HOTKEY_GPIO,
+                                              &unit_id, &channel);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    adc_oneshot_unit_handle_t unit = NULL;
+    adc_oneshot_unit_init_cfg_t init_config = {
+        .unit_id = unit_id,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+    err = adc_oneshot_new_unit(&init_config, &unit);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    adc_oneshot_chan_cfg_t channel_config = {
+        .atten = FUNKEY_FLASH_HOTKEY_ADC_ATTEN,
+        .bitwidth = ADC_BITWIDTH_12,
+    };
+    err = adc_oneshot_config_channel(unit, channel, &channel_config);
+    if (err != ESP_OK) {
+        (void)adc_oneshot_del_unit(unit);
+        return err;
+    }
+
+    (void)gpio_set_pull_mode(FUNKEY_FLASH_HOTKEY_GPIO, GPIO_FLOATING);
+
+    uint32_t sample_count = FUNKEY_FLASH_HOTKEY_ADC_SAMPLE_COUNT;
+    if (sample_count == 0) {
+        sample_count = 1;
+    }
+
+    uint32_t total = 0;
+    for (uint32_t sample = 0; sample < sample_count; ++sample) {
+        int raw = 0;
+        err = adc_oneshot_read(unit, channel, &raw);
+        if (err != ESP_OK) {
+            (void)adc_oneshot_del_unit(unit);
+            return err;
+        }
+        total += (uint32_t)raw;
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+
+    (void)adc_oneshot_del_unit(unit);
+    *out_raw = (uint16_t)((total + (sample_count / 2U)) / sample_count);
+    return ESP_OK;
+}
+
+static bool flash_hotkey_is_held(void)
+{
+    gpio_config_t config = {
+        .pin_bit_mask = (1ULL << (uint32_t)FUNKEY_FLASH_HOTKEY_GPIO),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    esp_err_t err = gpio_config(&config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Flash hotkey GPIO%d config failed: %s",
+                 (int)FUNKEY_FLASH_HOTKEY_GPIO, esp_err_to_name(err));
+        return false;
+    }
+
+    uint32_t sample_ms = FUNKEY_FLASH_HOTKEY_SAMPLE_MS;
+    if (sample_ms == 0) {
+        sample_ms = 1;
+    }
+
+    TickType_t sample_ticks = pdMS_TO_TICKS(sample_ms);
+    if (sample_ticks == 0) {
+        sample_ticks = 1;
+    }
+
+    for (uint32_t elapsed_ms = 0; elapsed_ms < FUNKEY_FLASH_HOTKEY_HOLD_MS;
+         elapsed_ms += sample_ms) {
+        if (gpio_get_level(FUNKEY_FLASH_HOTKEY_GPIO) != 0) {
+            (void)gpio_set_pull_mode(FUNKEY_FLASH_HOTKEY_GPIO, GPIO_FLOATING);
+            return false;
+        }
+        vTaskDelay(sample_ticks);
+    }
+
+    uint16_t raw = 0;
+    err = flash_hotkey_read_raw(&raw);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Flash hotkey GPIO%d ADC read failed: %s",
+                 (int)FUNKEY_FLASH_HOTKEY_GPIO, esp_err_to_name(err));
+        return false;
+    }
+
+    if (raw > FUNKEY_FLASH_HOTKEY_ADC_MAX_RAW) {
+        ESP_LOGI(TAG, "Flash hotkey GPIO%d held low, but ADC raw %u is not a hard short",
+                 (int)FUNKEY_FLASH_HOTKEY_GPIO, raw);
+        return false;
+    }
+
+    return true;
+}
+
+static void maybe_enter_rom_download_mode(void)
+{
+    if (!flash_hotkey_is_held()) {
+        return;
+    }
+
+    ESP_LOGW(TAG,
+             "GPIO%d held low at boot; restarting into ESP32-S3 ROM download mode",
+             (int)FUNKEY_FLASH_HOTKEY_GPIO);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+}
+#endif
 
 // UUIDs:
 // service 8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839
@@ -405,6 +562,13 @@ static bool report_is_removed(const uint8_t report[FUNKEY_REPORT_LEN])
     return memcmp(report, s_removed_report, FUNKEY_REPORT_LEN) == 0;
 }
 
+#if FUNKEY_PHYSICAL_ENABLED
+static bool physical_report_is_contact_issue(const uint8_t report[FUNKEY_REPORT_LEN])
+{
+    return memcmp(report, s_physical_contact_issue_report, FUNKEY_REPORT_LEN) == 0;
+}
+#endif
+
 static uint32_t report_id(const uint8_t report[FUNKEY_REPORT_LEN])
 {
     return ((uint32_t)report[4] << 24) | ((uint32_t)report[5] << 16) |
@@ -505,6 +669,11 @@ static void physical_report_set_id(uint32_t id)
 static void physical_report_remove(void)
 {
     physical_report_set(s_removed_report);
+}
+
+static void physical_report_contact_issue(void)
+{
+    physical_report_set(s_physical_contact_issue_report);
 }
 #endif
 
@@ -659,7 +828,8 @@ static bool physical_decode_once(physical_state_t *state)
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "Physical ADC read failed on %s: %s",
                      s_physical_adc_inputs[index].label, esp_err_to_name(err));
-            return false;
+            state->type = PHYSICAL_STATE_CONTACT_ISSUE;
+            return true;
         }
 
         if (state->raw[index] < s_physical_no_figure_threshold_raw) {
@@ -674,7 +844,8 @@ static bool physical_decode_once(physical_state_t *state)
 
     for (size_t index = 0; index < TU_ARRAY_SIZE(s_physical_adc_inputs); ++index) {
         if (state->raw[index] >= s_physical_no_figure_threshold_raw) {
-            return false;
+            state->type = PHYSICAL_STATE_CONTACT_ISSUE;
+            return true;
         }
     }
 
@@ -684,12 +855,14 @@ static bool physical_decode_once(physical_state_t *state)
     int hundreds = physical_digit_from_raw(state->raw[3]);
 
     if (checksum < 0 || ones < 0 || tens < 0 || hundreds < 0) {
-        return false;
+        state->type = PHYSICAL_STATE_CONTACT_ISSUE;
+        return true;
     }
 
     int expected_checksum = (ones + tens + hundreds) % 10;
     if (checksum != expected_checksum) {
-        return false;
+        state->type = PHYSICAL_STATE_CONTACT_ISSUE;
+        return true;
     }
 
     state->type = PHYSICAL_STATE_PRESENT;
@@ -717,6 +890,14 @@ static void physical_apply_observed_state(const physical_state_t *state)
         ESP_LOGI(TAG, "Physical Funkey removed");
         physical_report_remove();
         report_remove();
+        return;
+    }
+
+    if (state->type == PHYSICAL_STATE_CONTACT_ISSUE) {
+        ESP_LOGW(TAG,
+                 "Physical reader contact issue raw %u,%u,%u,%u",
+                 state->raw[0], state->raw[1], state->raw[2], state->raw[3]);
+        physical_report_contact_issue();
         return;
     }
 
@@ -979,6 +1160,11 @@ static int ble_command_access(uint16_t conn_handle, uint16_t attr_handle,
     if (len == 1 && command[0] == FUNKEY_BLE_CMD_USE_PHYSICAL) {
         uint8_t report[FUNKEY_REPORT_LEN];
         physical_report_copy(report);
+        if (physical_report_is_contact_issue(report)) {
+            ESP_LOGW(TAG, "BLE use physical ignored: physical contact issue");
+            return 0;
+        }
+
         report_set(report);
         ESP_LOGI(TAG, "BLE use physical");
         return 0;
@@ -1527,6 +1713,10 @@ const usbd_class_driver_t *usbd_app_driver_get_cb(uint8_t *driver_count)
 
 void app_main(void)
 {
+#if FUNKEY_FLASH_HOTKEY_ENABLED
+    maybe_enter_rom_download_mode();
+#endif
+
     ESP_LOGI(TAG, "Starting Funkey Shifter Portal device");
     ESP_LOGI(TAG, "VID:PID %04X:%04X", FUNKEY_USB_VID, FUNKEY_USB_PID);
 

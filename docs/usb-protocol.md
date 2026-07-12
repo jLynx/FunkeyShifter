@@ -202,6 +202,11 @@ The ADC bucket math keeps the physical pull-up value at `220k` and applies a
 separate ADC target scale, currently `900/1000`, based on measured raw values
 from known figures with the external pull-up harness fitted.
 
+At firmware startup, holding GPIO8 low for 250 ms restarts the ESP32-S3 into
+ROM download mode for flashing. This is a firmware-assisted shortcut, not a
+hardware strap replacement; if the app cannot boot at all, GPIO0 plus reset is
+still the fallback.
+
 The physical board encodes `R3 R2 R1 R4`, where `R3` is hundreds, `R2` is
 tens, `R1` is ones, and `R4` is `(R1 + R2 + R3) % 10`. The firmware converts a
 stable physical placement into the same decoded report used by BLE/software
@@ -228,7 +233,11 @@ to open the USB device or require a WinUSB driver binding on Windows.
 The report and physical report characteristic values are the same decoded
 8-byte report documented above. The report characteristic is the current active
 figure. The physical report characteristic is only the reader's physical
-placement state. Command payloads are:
+placement state. A physical contact problem is reported only on the physical
+report characteristic as `FF FF FF F1 00 00 00 01`; the active report remains
+unchanged until the reader sees a valid figure or a clean removal.
+
+Command payloads are:
 
 | Payload | Meaning |
 | --- | --- |

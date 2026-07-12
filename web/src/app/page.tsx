@@ -30,6 +30,7 @@ import {
   disconnectFunkeyBleDevice,
   FunkeyBleConnection,
   isWebBluetoothAvailable,
+  isPhysicalContactIssueReport,
   readCurrentReport,
   readPhysicalReport,
   removeCurrentReport,
@@ -62,7 +63,8 @@ export default function Home() {
   const currentId = currentReport ? idFromReport(currentReport) : null;
   const currentVariant = findVariantById(currentId);
   const physicalId = physicalReport ? idFromReport(physicalReport) : null;
-  const physicalVariant = findVariantById(physicalId);
+  const physicalContactIssue = isPhysicalContactIssueReport(physicalReport);
+  const physicalVariant = physicalContactIssue ? undefined : findVariantById(physicalId);
   const physicalReaderAvailable = connection ? connection.physicalReportCharacteristic !== null : false;
   const isConnected = connectionState === "connected" && connection !== null && connection.server.connected;
 
@@ -376,6 +378,7 @@ export default function Home() {
           <PhysicalPanel
             physicalVariant={physicalVariant}
             physicalId={physicalId}
+            contactIssue={physicalContactIssue}
             isConnected={isConnected}
             readerAvailable={physicalReaderAvailable}
             busyId={busyId}
@@ -508,6 +511,7 @@ function CurrentPanel({
 function PhysicalPanel({
   physicalVariant,
   physicalId,
+  contactIssue,
   isConnected,
   readerAvailable,
   busyId,
@@ -515,27 +519,30 @@ function PhysicalPanel({
 }: {
   physicalVariant: FunkeyVariant | undefined;
   physicalId: number | null;
+  contactIssue: boolean;
   isConnected: boolean;
   readerAvailable: boolean;
   busyId: BusyId;
   onSelect: () => void;
 }) {
-  const hasPhysicalFigure = physicalId !== null && physicalId !== 0;
-  const title = physicalVariant ? physicalVariant.label : hasPhysicalFigure ? "Unknown" : "Empty";
+  const hasPhysicalFigure = !contactIssue && physicalId !== null && physicalId !== 0;
+  const title = contactIssue ? "Contact issue" : physicalVariant ? physicalVariant.label : hasPhysicalFigure ? "Unknown" : "Empty";
   const detail = !isConnected
     ? "Disconnected"
     : !readerAvailable
       ? "Reader unavailable"
-      : physicalId === null
+      : contactIssue
+        ? "Detected, but not seated cleanly"
+        : physicalId === null
         ? "Checking reader"
         : hasPhysicalFigure
           ? `ID ${formatDisplayFunkeyId(physicalId)}`
           : "No physical Funkey";
 
   return (
-    <section className="panel-section physical-panel" aria-live="polite">
+    <section className={`panel-section physical-panel${contactIssue ? " contact-issue" : ""}`} aria-live="polite">
       <div className="section-title">
-        <Activity size={18} />
+        {contactIssue ? <AlertTriangle size={18} /> : <Activity size={18} />}
         <h2>Physical</h2>
       </div>
 
@@ -557,12 +564,25 @@ function PhysicalPanel({
         </div>
       </div>
 
+      {contactIssue ? (
+        <div className="physical-contact-warning" role="status">
+          <AlertTriangle size={16} />
+          <span>Re-seat the Funkey or move it slightly so the pads make contact.</span>
+        </div>
+      ) : null}
+
       <button
         className="secondary-button full-width physical-select-button"
         type="button"
         onClick={onSelect}
-        disabled={!isConnected || !readerAvailable || !hasPhysicalFigure || busyId !== null}
-        title={hasPhysicalFigure ? `Set current to physical ID ${formatDisplayFunkeyId(physicalId)}` : "No physical Funkey attached"}
+        disabled={!isConnected || !readerAvailable || contactIssue || !hasPhysicalFigure || busyId !== null}
+        title={
+          contactIssue
+            ? "Physical reader contact issue"
+            : hasPhysicalFigure
+              ? `Set current to physical ID ${formatDisplayFunkeyId(physicalId)}`
+              : "No physical Funkey attached"
+        }
       >
         {busyId === "physical" ? <RefreshCw size={16} className="spin" /> : <Send size={16} />}
         Use physical

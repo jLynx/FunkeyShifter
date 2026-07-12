@@ -8,6 +8,7 @@ const CMD_SET_REPORT = 0x02;
 const CMD_REMOVE = 0x03;
 const CMD_USE_PHYSICAL = 0x04;
 const REPORT_LEN = 8;
+const PHYSICAL_CONTACT_ISSUE_REPORT = new Uint8Array([0xff, 0xff, 0xff, 0xf1, 0x00, 0x00, 0x00, 0x01]);
 
 export type FunkeyBleConnection = {
   device: BluetoothDevice;
@@ -116,6 +117,14 @@ export function deviceInfo(device: BluetoothDevice): FunkeyBleDeviceInfo {
     name: device.name ?? FUNKEY_BLE_NAME,
     id: device.id,
   };
+}
+
+export function isPhysicalContactIssueReport(report: Uint8Array | null): boolean {
+  if (!report || report.length !== REPORT_LEN) {
+    return false;
+  }
+
+  return PHYSICAL_CONTACT_ISSUE_REPORT.every((value, index) => report[index] === value);
 }
 
 async function writeCommand(connection: FunkeyBleConnection, command: Uint8Array): Promise<void> {

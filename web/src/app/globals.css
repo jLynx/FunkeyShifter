@@ -435,6 +435,36 @@ h1 {
   margin-bottom: 13px;
 }
 
+.physical-panel.contact-issue {
+  border-color: rgb(166 95 0 / 36%);
+  background: linear-gradient(180deg, #fffaf0, var(--surface));
+}
+
+.physical-panel.contact-issue .section-title svg {
+  color: var(--warning);
+}
+
+.physical-contact-warning {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin: 0 0 13px;
+  padding: 9px 10px;
+  border: 1px solid rgb(166 95 0 / 24%);
+  border-radius: 8px;
+  background: var(--warning-soft);
+  color: #6f4100;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.physical-contact-warning svg {
+  margin-top: 1px;
+  color: var(--warning);
+}
+
 .physical-select-button {
   min-height: 38px;
 }
