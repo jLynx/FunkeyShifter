@@ -14,7 +14,7 @@ except ImportError as exc:  # pragma: no cover - depends on host setup
     raise SystemExit(f"PyUSB is required: py -m pip install pyusb libusb-package ({exc})") from exc
 
 
-# Temporary hardware-test VID/PID currently used in src/main.c.
+# Temporary hardware-test VID/PID currently used in src/funkey_protocol.hpp.
 # For the final remake/private-test VID/PID, pass --vid 0x1209 --pid 0x0001
 # or change these defaults when the firmware IDs change.
 DEFAULT_VID = 0x0E4C

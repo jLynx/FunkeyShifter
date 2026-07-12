@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 
-# The ADC bucket centers used by src/main.c.
+# The ADC bucket centers used by src/funkey_report.cpp.
 ADC_BUCKETS = [278, 375, 465, 554, 643, 713, 783, 844, 899, 942]
 BASELINE_ADC = 177
 

@@ -1,4 +1,4 @@
-export const FUNKEY_BLE_NAME = "Funkey Shifter";
+export const FUNKEY_BLE_NAME = "FunkeyShifter";
 export const FUNKEY_SERVICE_UUID = "8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839";
 export const FUNKEY_REPORT_CHARACTERISTIC_UUID = "8a8f9f86-0d1c-4e54-9f54-1f2e2a94d839";
 export const FUNKEY_COMMAND_CHARACTERISTIC_UUID = "8a8f9f87-0d1c-4e54-9f54-1f2e2a94d839";

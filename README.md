@@ -31,7 +31,7 @@ state to the game.
 3. Open [funkeyshifter.jlynx.workers.dev](https://funkeyshifter.jlynx.workers.dev/)
    in Chrome or Edge.
 4. Click `Connect BLE`.
-5. Select `Funkey Shifter` from the browser Bluetooth picker.
+5. Select `FunkeyShifter` from the browser Bluetooth picker.
 6. Choose a Funkey from the website to change what the game sees.
 
 Web Bluetooth requires Chrome or Edge and a secure browser context. The deployed

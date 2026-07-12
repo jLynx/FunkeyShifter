@@ -22,7 +22,7 @@ a secure browser context, so use `http://localhost:3000`,
 
 ## BLE Path
 
-The firmware advertises as `Funkey Shifter` and exposes this GATT surface:
+The firmware advertises as `FunkeyShifter` and exposes this GATT surface:
 
 - service `8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839`
 - report characteristic `8a8f9f86-0d1c-4e54-9f54-1f2e2a94d839`, read/notify
@@ -39,7 +39,7 @@ The report value is the decoded 8-byte form documented in
 
 ## Browser Notes
 
-Click `Connect BLE`, select `Funkey Shifter` from the Bluetooth picker, then use
+Click `Connect BLE`, select `FunkeyShifter` from the Bluetooth picker, then use
 the catalog or custom input to switch figures. If the device is not listed,
 reflash the BLE-enabled firmware, reset or replug the ESP32, and make sure
 Bluetooth is enabled on the PC.

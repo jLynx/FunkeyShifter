@@ -13,7 +13,7 @@ the original MegaByte hardware.
 | Product | `Funkey Shifter Portal` |
 | Configuration | 1 |
 
-For the published remake, replace the temporary test VID/PID in `src/main.c`
+For the published remake, replace the temporary test VID/PID in `src/funkey_protocol.hpp`
 with the remake/private IDs and update this table.
 
 ## Portal Interface
@@ -224,7 +224,7 @@ to open the USB device or require a WinUSB driver binding on Windows.
 
 | Field | Value |
 | --- | --- |
-| Device name | `Funkey Shifter` |
+| Device name | `FunkeyShifter` |
 | Service UUID | `8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839` |
 | Report characteristic | `8a8f9f86-0d1c-4e54-9f54-1f2e2a94d839`, read/notify |
 | Command characteristic | `8a8f9f87-0d1c-4e54-9f54-1f2e2a94d839`, write/write without response |
