@@ -238,6 +238,8 @@ def format_capabilities(data: Iterable[int]) -> str:
         names.append("ble_control")
     if flags & 0x04:
         names.append("raw_packet_set")
+    if flags & 0x08:
+        names.append("physical_reader")
     if not names:
         names.append("none")
 

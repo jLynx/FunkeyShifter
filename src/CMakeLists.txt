@@ -1,5 +1,5 @@
 idf_component_register(
     SRCS "main.c"
     INCLUDE_DIRS "."
-    REQUIRES bt nvs_flash
+    REQUIRES bt nvs_flash esp_adc esp_driver_gpio
 )

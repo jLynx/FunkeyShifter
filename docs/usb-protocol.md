@@ -152,6 +152,7 @@ Feature flags:
 | `0` | Managed catalog/profile expected by the game |
 | `1` | BLE control service available |
 | `2` | Raw packet override request available |
+| `3` | Physical resistor-pad reader enabled |
 
 For the remake, the simplest path is:
 
@@ -180,6 +181,37 @@ tools:
 requests. `tools/funkey_portal_test.py` is a reference host-side implementation
 for the init, capability, get, set, remove, and interrupt-read paths.
 
+## Physical Funkey Reader
+
+The firmware can also read a real Funkey resistor board. Pad 1/common connects
+to GND and the other four pads connect to the GPIO8..GPIO11 header block. Each
+GPIO line needs its own external `220k` pull-up to 3.3 V:
+
+| Funkey pad | Meaning | Default ESP32-S3 ADC |
+| --- | --- | --- |
+| 1 | Common | GND |
+| 2 | R4 checksum | ADC1 channel 7 / GPIO8 |
+| 3 | R1 ones | ADC1 channel 8 / GPIO9 |
+| 4 | R2 tens | ADC1 channel 9 / GPIO10 |
+| 5 | R3 hundreds | ADC2 channel 0 / GPIO11 |
+
+GPIO12 and GPIO13 are not used by the default reader mapping; they remain free
+in the same header block. ESP32 internal pull-ups are useful for rough contact
+testing only; reliable ID decoding needs the four external `220k` pull-ups.
+The ADC bucket math keeps the physical pull-up value at `220k` and applies a
+separate ADC target scale, currently `900/1000`, based on measured raw values
+from known figures with the external pull-up harness fitted.
+
+The physical board encodes `R3 R2 R1 R4`, where `R3` is hundreds, `R2` is
+tens, `R1` is ones, and `R4` is `(R1 + R2 + R3) % 10`. The firmware converts a
+stable physical placement into the same decoded report used by BLE/software
+control.
+
+Last action wins: BLE/software set/remove commands update the current report
+immediately, and the physical reader only updates the report when the physical
+state changes. Leaving a physical Funkey sitting on the reader does not
+continuously override a later BLE selection; removing or replacing it does.
+
 ## BLE Browser Control
 
 The ESP32 also exposes a Web Bluetooth control path so the browser does not need
@@ -191,14 +223,18 @@ to open the USB device or require a WinUSB driver binding on Windows.
 | Service UUID | `8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839` |
 | Report characteristic | `8a8f9f86-0d1c-4e54-9f54-1f2e2a94d839`, read/notify |
 | Command characteristic | `8a8f9f87-0d1c-4e54-9f54-1f2e2a94d839`, write/write without response |
+| Physical report characteristic | `8a8f9f88-0d1c-4e54-9f54-1f2e2a94d839`, read/notify |
 
-The report characteristic value is the same decoded 8-byte report documented
-above. Command payloads are:
+The report and physical report characteristic values are the same decoded
+8-byte report documented above. The report characteristic is the current active
+figure. The physical report characteristic is only the reader's physical
+placement state. Command payloads are:
 
 | Payload | Meaning |
 | --- | --- |
 | `02` plus 8 report bytes | Set current decoded report |
 | `03` | Remove current figure |
+| `04` | Set current figure to the latest physical report |
 
 The browser app in `web/` uses this BLE path. The USB interface can remain bound
 to `libusbK` for the game.

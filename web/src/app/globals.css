@@ -431,6 +431,14 @@ h1 {
   color: var(--danger);
 }
 
+.physical-status {
+  margin-bottom: 13px;
+}
+
+.physical-select-button {
+  min-height: 38px;
+}
+
 .custom-form {
   display: grid;
   grid-template-columns: 1fr auto;

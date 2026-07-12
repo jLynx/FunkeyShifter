@@ -2,9 +2,11 @@ export const FUNKEY_BLE_NAME = "Funkey Shifter";
 export const FUNKEY_SERVICE_UUID = "8a8f9f85-0d1c-4e54-9f54-1f2e2a94d839";
 export const FUNKEY_REPORT_CHARACTERISTIC_UUID = "8a8f9f86-0d1c-4e54-9f54-1f2e2a94d839";
 export const FUNKEY_COMMAND_CHARACTERISTIC_UUID = "8a8f9f87-0d1c-4e54-9f54-1f2e2a94d839";
+export const FUNKEY_PHYSICAL_REPORT_CHARACTERISTIC_UUID = "8a8f9f88-0d1c-4e54-9f54-1f2e2a94d839";
 
 const CMD_SET_REPORT = 0x02;
 const CMD_REMOVE = 0x03;
+const CMD_USE_PHYSICAL = 0x04;
 const REPORT_LEN = 8;
 
 export type FunkeyBleConnection = {
@@ -12,6 +14,7 @@ export type FunkeyBleConnection = {
   server: BluetoothRemoteGATTServer;
   reportCharacteristic: BluetoothRemoteGATTCharacteristic;
   commandCharacteristic: BluetoothRemoteGATTCharacteristic;
+  physicalReportCharacteristic: BluetoothRemoteGATTCharacteristic | null;
 };
 
 export type FunkeyBleDeviceInfo = {
@@ -43,17 +46,28 @@ export async function connectFunkeyBleDevice(device: BluetoothDevice): Promise<F
   const service = await server.getPrimaryService(FUNKEY_SERVICE_UUID);
   const reportCharacteristic = await service.getCharacteristic(FUNKEY_REPORT_CHARACTERISTIC_UUID);
   const commandCharacteristic = await service.getCharacteristic(FUNKEY_COMMAND_CHARACTERISTIC_UUID);
+  const physicalReportCharacteristic = await optionalCharacteristic(service, FUNKEY_PHYSICAL_REPORT_CHARACTERISTIC_UUID);
 
   return {
     device,
     server,
     reportCharacteristic,
     commandCharacteristic,
+    physicalReportCharacteristic,
   };
 }
 
 export async function readCurrentReport(connection: FunkeyBleConnection): Promise<Uint8Array> {
   const value = await connection.reportCharacteristic.readValue();
+  return reportFromDataView(value);
+}
+
+export async function readPhysicalReport(connection: FunkeyBleConnection): Promise<Uint8Array | null> {
+  if (!connection.physicalReportCharacteristic) {
+    return null;
+  }
+
+  const value = await connection.physicalReportCharacteristic.readValue();
   return reportFromDataView(value);
 }
 
@@ -69,34 +83,26 @@ export async function removeCurrentReport(connection: FunkeyBleConnection): Prom
   await writeCommand(connection, new Uint8Array([CMD_REMOVE]));
 }
 
+export async function usePhysicalReport(connection: FunkeyBleConnection): Promise<void> {
+  await writeCommand(connection, new Uint8Array([CMD_USE_PHYSICAL]));
+}
+
 export async function startReportNotifications(
   connection: FunkeyBleConnection,
   onReport: (report: Uint8Array) => void,
 ): Promise<() => void> {
-  const characteristic = connection.reportCharacteristic;
-  const handleChange = (event: Event) => {
-    const changedCharacteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
-    const value = changedCharacteristic?.value;
-    if (!value) {
-      return;
-    }
+  return startCharacteristicNotifications(connection.reportCharacteristic, onReport);
+}
 
-    onReport(reportFromDataView(value));
-  };
-
-  characteristic.addEventListener("characteristicvaluechanged", handleChange);
-
-  try {
-    await characteristic.startNotifications();
-  } catch (error) {
-    characteristic.removeEventListener("characteristicvaluechanged", handleChange);
-    throw error;
+export async function startPhysicalReportNotifications(
+  connection: FunkeyBleConnection,
+  onReport: (report: Uint8Array) => void,
+): Promise<(() => void) | null> {
+  if (!connection.physicalReportCharacteristic) {
+    return null;
   }
 
-  return () => {
-    characteristic.removeEventListener("characteristicvaluechanged", handleChange);
-    void characteristic.stopNotifications().catch(() => undefined);
-  };
+  return startCharacteristicNotifications(connection.physicalReportCharacteristic, onReport);
 }
 
 export function disconnectFunkeyBleDevice(connection: FunkeyBleConnection): void {
@@ -121,6 +127,50 @@ async function writeCommand(connection: FunkeyBleConnection, command: Uint8Array
   }
 
   await connection.commandCharacteristic.writeValue(buffer);
+}
+
+async function optionalCharacteristic(
+  service: BluetoothRemoteGATTService,
+  uuid: BluetoothCharacteristicUUID,
+): Promise<BluetoothRemoteGATTCharacteristic | null> {
+  try {
+    return await service.getCharacteristic(uuid);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "NotFoundError") {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function startCharacteristicNotifications(
+  characteristic: BluetoothRemoteGATTCharacteristic,
+  onReport: (report: Uint8Array) => void,
+): Promise<() => void> {
+  const handleChange = (event: Event) => {
+    const changedCharacteristic = event.target as BluetoothRemoteGATTCharacteristic | null;
+    const value = changedCharacteristic?.value;
+    if (!value) {
+      return;
+    }
+
+    onReport(reportFromDataView(value));
+  };
+
+  characteristic.addEventListener("characteristicvaluechanged", handleChange);
+
+  try {
+    await characteristic.startNotifications();
+  } catch (error) {
+    characteristic.removeEventListener("characteristicvaluechanged", handleChange);
+    throw error;
+  }
+
+  return () => {
+    characteristic.removeEventListener("characteristicvaluechanged", handleChange);
+    void characteristic.stopNotifications().catch(() => undefined);
+  };
 }
 
 function reportFromDataView(value: DataView): Uint8Array {

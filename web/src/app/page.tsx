@@ -31,14 +31,17 @@ import {
   FunkeyBleConnection,
   isWebBluetoothAvailable,
   readCurrentReport,
+  readPhysicalReport,
   removeCurrentReport,
   requestFunkeyBleDevice,
   setCurrentReport as writeCurrentReport,
+  startPhysicalReportNotifications,
   startReportNotifications,
+  usePhysicalReport,
 } from "@/lib/webble";
 
 type ConnectionState = "idle" | "connecting" | "connected" | "error";
-type BusyId = number | "remove" | "custom" | "refresh" | null;
+type BusyId = number | "remove" | "custom" | "physical" | "refresh" | null;
 
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 const PULSE_REMOVE = true;
@@ -49,14 +52,18 @@ export default function Home() {
   const [connection, setConnection] = useState<FunkeyBleConnection | null>(null);
   const [status, setStatus] = useState("Disconnected");
   const [currentReport, setCurrentReport] = useState<Uint8Array | null>(null);
+  const [physicalReport, setPhysicalReport] = useState<Uint8Array | null>(null);
   const [query, setQuery] = useState("");
   const [customValue, setCustomValue] = useState("");
   const [busyId, setBusyId] = useState<BusyId>(null);
   const [bluetoothReady, setBluetoothReady] = useState(false);
-  const stopNotificationsRef = useRef<(() => void) | null>(null);
+  const stopNotificationsRef = useRef<(() => void)[]>([]);
 
   const currentId = currentReport ? idFromReport(currentReport) : null;
   const currentVariant = findVariantById(currentId);
+  const physicalId = physicalReport ? idFromReport(physicalReport) : null;
+  const physicalVariant = findVariantById(physicalId);
+  const physicalReaderAvailable = connection ? connection.physicalReportCharacteristic !== null : false;
   const isConnected = connectionState === "connected" && connection !== null && connection.server.connected;
 
   const filteredFamilies = useMemo(() => filterFamilies(query), [query]);
@@ -80,6 +87,7 @@ export default function Home() {
       stopReportNotifications();
       setConnection(null);
       setCurrentReport(null);
+      setPhysicalReport(null);
       setConnectionState("idle");
       setStatus("BLE disconnected");
     };
@@ -92,8 +100,10 @@ export default function Home() {
 
   function stopReportNotifications() {
     const stopNotifications = stopNotificationsRef.current;
-    stopNotificationsRef.current = null;
-    stopNotifications?.();
+    stopNotificationsRef.current = [];
+    for (const stop of stopNotifications) {
+      stop();
+    }
   }
 
   async function attachDevice(selectedDevice: BluetoothDevice) {
@@ -102,29 +112,42 @@ export default function Home() {
     setStatus("Connecting over BLE...");
 
     let nextConnection: FunkeyBleConnection | null = null;
-    let stopNotifications: (() => void) | null = null;
+    let stopNotifications: (() => void)[] = [];
 
     try {
       nextConnection = await connectFunkeyBleDevice(selectedDevice);
-      stopNotifications = await startReportNotifications(nextConnection, (report) => {
+      stopNotifications.push(await startReportNotifications(nextConnection, (report) => {
         setCurrentReport(report);
         setConnectionState("connected");
         setStatus("Current Funkey updated");
+      }));
+      const stopPhysicalNotifications = await startPhysicalReportNotifications(nextConnection, (report) => {
+        setPhysicalReport(report);
       });
-      const report = await readCurrentReport(nextConnection);
+      if (stopPhysicalNotifications) {
+        stopNotifications.push(stopPhysicalNotifications);
+      }
+      const [report, nextPhysicalReport] = await Promise.all([
+        readCurrentReport(nextConnection),
+        readPhysicalReport(nextConnection),
+      ]);
 
       stopNotificationsRef.current = stopNotifications;
       setConnection(nextConnection);
       setCurrentReport(report);
+      setPhysicalReport(nextPhysicalReport);
       setConnectionState("connected");
       setStatus("Connected over BLE");
     } catch (error) {
-      stopNotifications?.();
+      for (const stop of stopNotifications) {
+        stop();
+      }
       if (nextConnection) {
         disconnectFunkeyBleDevice(nextConnection);
       }
       setConnection(null);
       setCurrentReport(null);
+      setPhysicalReport(null);
       setConnectionState("error");
       setStatus(errorMessage(error));
     }
@@ -156,6 +179,7 @@ export default function Home() {
     disconnectFunkeyBleDevice(connection);
     setConnection(null);
     setCurrentReport(null);
+    setPhysicalReport(null);
     setConnectionState("idle");
     setStatus("Disconnected");
   }
@@ -167,8 +191,12 @@ export default function Home() {
 
     setBusyId("refresh");
     try {
-      const report = await readCurrentReport(connection);
+      const [report, nextPhysicalReport] = await Promise.all([
+        readCurrentReport(connection),
+        readPhysicalReport(connection),
+      ]);
       setCurrentReport(report);
+      setPhysicalReport(nextPhysicalReport);
       setConnectionState("connected");
       setStatus("Status refreshed");
     } catch (error) {
@@ -217,6 +245,30 @@ export default function Home() {
       setCurrentReport(readback);
       setConnectionState("connected");
       setStatus("Removed");
+    } catch (error) {
+      setConnectionState("error");
+      setStatus(errorMessage(error));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function selectPhysicalFigure() {
+    if (!connection || physicalId === null || physicalId === 0) {
+      return;
+    }
+
+    setBusyId("physical");
+    try {
+      await usePhysicalReport(connection);
+      const [readback, nextPhysicalReport] = await Promise.all([
+        readCurrentReport(connection),
+        readPhysicalReport(connection),
+      ]);
+      setCurrentReport(readback);
+      setPhysicalReport(nextPhysicalReport);
+      setConnectionState("connected");
+      setStatus(`Set physical ${formatDisplayFunkeyId(physicalId)}`);
     } catch (error) {
       setConnectionState("error");
       setStatus(errorMessage(error));
@@ -319,6 +371,15 @@ export default function Home() {
             isConnected={isConnected}
             busyId={busyId}
             onRefresh={refreshStatus}
+          />
+
+          <PhysicalPanel
+            physicalVariant={physicalVariant}
+            physicalId={physicalId}
+            isConnected={isConnected}
+            readerAvailable={physicalReaderAvailable}
+            busyId={busyId}
+            onSelect={selectPhysicalFigure}
           />
 
           <section className="panel-section">
@@ -440,6 +501,72 @@ function CurrentPanel({
           <small className={`current-status-message ${connectionState}`}>{status}</small>
         </div>
       </div>
+    </section>
+  );
+}
+
+function PhysicalPanel({
+  physicalVariant,
+  physicalId,
+  isConnected,
+  readerAvailable,
+  busyId,
+  onSelect,
+}: {
+  physicalVariant: FunkeyVariant | undefined;
+  physicalId: number | null;
+  isConnected: boolean;
+  readerAvailable: boolean;
+  busyId: BusyId;
+  onSelect: () => void;
+}) {
+  const hasPhysicalFigure = physicalId !== null && physicalId !== 0;
+  const title = physicalVariant ? physicalVariant.label : hasPhysicalFigure ? "Unknown" : "Empty";
+  const detail = !isConnected
+    ? "Disconnected"
+    : !readerAvailable
+      ? "Reader unavailable"
+      : physicalId === null
+        ? "Checking reader"
+        : hasPhysicalFigure
+          ? `ID ${formatDisplayFunkeyId(physicalId)}`
+          : "No physical Funkey";
+
+  return (
+    <section className="panel-section physical-panel" aria-live="polite">
+      <div className="section-title">
+        <Activity size={18} />
+        <h2>Physical</h2>
+      </div>
+
+      <div className="current-status physical-status">
+        {physicalVariant?.imagePath ? (
+          <img
+            className="current-funkey-thumb"
+            src={physicalVariant.imagePath}
+            alt={`${physicalVariant.label} character`}
+            width={55}
+            height={62}
+          />
+        ) : (
+          <span className="current-funkey-thumb current-funkey-thumb-placeholder" aria-hidden="true" />
+        )}
+        <div className="current-status-copy">
+          <strong>{title}</strong>
+          <small>{detail}</small>
+        </div>
+      </div>
+
+      <button
+        className="secondary-button full-width physical-select-button"
+        type="button"
+        onClick={onSelect}
+        disabled={!isConnected || !readerAvailable || !hasPhysicalFigure || busyId !== null}
+        title={hasPhysicalFigure ? `Set current to physical ID ${formatDisplayFunkeyId(physicalId)}` : "No physical Funkey attached"}
+      >
+        {busyId === "physical" ? <RefreshCw size={16} className="spin" /> : <Send size={16} />}
+        Use physical
+      </button>
     </section>
   );
 }
