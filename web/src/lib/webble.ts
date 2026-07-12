@@ -23,6 +23,8 @@ export type FunkeyBleDeviceInfo = {
   id: string;
 };
 
+const gattQueues = new WeakMap<FunkeyBleConnection, Promise<void>>();
+
 export function isWebBluetoothAvailable(): boolean {
   return typeof navigator !== "undefined" && "bluetooth" in navigator;
 }
@@ -43,32 +45,41 @@ export async function connectFunkeyBleDevice(device: BluetoothDevice): Promise<F
     throw new Error("Selected Bluetooth device does not expose GATT services.");
   }
 
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(FUNKEY_SERVICE_UUID);
-  const reportCharacteristic = await service.getCharacteristic(FUNKEY_REPORT_CHARACTERISTIC_UUID);
-  const commandCharacteristic = await service.getCharacteristic(FUNKEY_COMMAND_CHARACTERISTIC_UUID);
-  const physicalReportCharacteristic = await optionalCharacteristic(service, FUNKEY_PHYSICAL_REPORT_CHARACTERISTIC_UUID);
+  const server = await bleStep("GATT connect", () => device.gatt!.connect());
+  const service = await bleStep("service discovery", () => server.getPrimaryService(FUNKEY_SERVICE_UUID));
+  const reportCharacteristic = await bleStep("report characteristic discovery", () =>
+    service.getCharacteristic(FUNKEY_REPORT_CHARACTERISTIC_UUID),
+  );
+  const commandCharacteristic = await bleStep("command characteristic discovery", () =>
+    service.getCharacteristic(FUNKEY_COMMAND_CHARACTERISTIC_UUID),
+  );
+  const physicalReportCharacteristic = await bleStep("physical characteristic discovery", () =>
+    optionalCharacteristic(service, FUNKEY_PHYSICAL_REPORT_CHARACTERISTIC_UUID),
+  );
 
-  return {
+  const connection = {
     device,
     server,
     reportCharacteristic,
     commandCharacteristic,
     physicalReportCharacteristic,
   };
+  gattQueues.set(connection, Promise.resolve());
+  return connection;
 }
 
 export async function readCurrentReport(connection: FunkeyBleConnection): Promise<Uint8Array> {
-  const value = await connection.reportCharacteristic.readValue();
+  const value = await bleStep("report read", () => queueGattOperation(connection, () => connection.reportCharacteristic.readValue()));
   return reportFromDataView(value);
 }
 
 export async function readPhysicalReport(connection: FunkeyBleConnection): Promise<Uint8Array | null> {
-  if (!connection.physicalReportCharacteristic) {
+  const characteristic = connection.physicalReportCharacteristic;
+  if (!characteristic) {
     return null;
   }
 
-  const value = await connection.physicalReportCharacteristic.readValue();
+  const value = await bleStep("physical report read", () => queueGattOperation(connection, () => characteristic.readValue()));
   return reportFromDataView(value);
 }
 
@@ -92,7 +103,7 @@ export async function startReportNotifications(
   connection: FunkeyBleConnection,
   onReport: (report: Uint8Array) => void,
 ): Promise<() => void> {
-  return startCharacteristicNotifications(connection.reportCharacteristic, onReport);
+  return startCharacteristicNotifications(connection, connection.reportCharacteristic, onReport);
 }
 
 export async function startPhysicalReportNotifications(
@@ -103,7 +114,7 @@ export async function startPhysicalReportNotifications(
     return null;
   }
 
-  return startCharacteristicNotifications(connection.physicalReportCharacteristic, onReport);
+  return startCharacteristicNotifications(connection, connection.physicalReportCharacteristic, onReport);
 }
 
 export function disconnectFunkeyBleDevice(connection: FunkeyBleConnection): void {
@@ -130,12 +141,47 @@ export function isPhysicalContactIssueReport(report: Uint8Array | null): boolean
 async function writeCommand(connection: FunkeyBleConnection, command: Uint8Array): Promise<void> {
   const buffer = toArrayBuffer(command);
 
-  if (connection.commandCharacteristic.writeValueWithResponse) {
-    await connection.commandCharacteristic.writeValueWithResponse(buffer);
-    return;
-  }
+  await bleStep("command write", () => queueGattOperation(connection, async () => {
+    if (connection.commandCharacteristic.writeValueWithResponse) {
+      await connection.commandCharacteristic.writeValueWithResponse(buffer);
+      return;
+    }
 
-  await connection.commandCharacteristic.writeValue(buffer);
+    await connection.commandCharacteristic.writeValue(buffer);
+  }));
+}
+
+async function bleStep<T>(step: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`${step} failed: ${error.name}: ${error.message}`);
+    }
+
+    throw new Error(`${step} failed`);
+  }
+}
+
+async function queueGattOperation<T>(
+  connection: FunkeyBleConnection,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = gattQueues.get(connection) ?? Promise.resolve();
+  let releaseCurrent: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+
+  // Some mobile BLE stacks reject overlapping GATT requests instead of queueing them.
+  gattQueues.set(connection, previous.catch(() => undefined).then(() => current));
+  await previous.catch(() => undefined);
+
+  try {
+    return await operation();
+  } finally {
+    releaseCurrent();
+  }
 }
 
 async function optionalCharacteristic(
@@ -154,6 +200,7 @@ async function optionalCharacteristic(
 }
 
 async function startCharacteristicNotifications(
+  connection: FunkeyBleConnection,
   characteristic: BluetoothRemoteGATTCharacteristic,
   onReport: (report: Uint8Array) => void,
 ): Promise<() => void> {
@@ -170,7 +217,7 @@ async function startCharacteristicNotifications(
   characteristic.addEventListener("characteristicvaluechanged", handleChange);
 
   try {
-    await characteristic.startNotifications();
+    await bleStep("notifications start", () => queueGattOperation(connection, () => characteristic.startNotifications()));
   } catch (error) {
     characteristic.removeEventListener("characteristicvaluechanged", handleChange);
     throw error;

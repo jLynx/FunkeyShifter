@@ -700,6 +700,10 @@ function errorMessage(error: unknown): string {
       return "Bluetooth adapter unavailable. Turn on Bluetooth and try again.";
     }
 
+    if (message.includes(" failed: ")) {
+      return `BLE failed: ${error.message}`;
+    }
+
     if (message.includes("gatt") || message.includes("networkerror")) {
       return "BLE connection failed. Replug or reset the ESP32 and try again.";
     }
