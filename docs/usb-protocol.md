@@ -7,10 +7,10 @@ the original MegaByte hardware.
 
 | Field | Value |
 | --- | --- |
-| VID | `0x0E4C` temporary local testing VID |
-| PID | `0x7288` temporary local testing PID |
-| Manufacturer | `Funkey Revival` |
-| Product | `Funkey Shifter Portal` |
+| VID | `0x0E4C` |
+| PID | `0x7288` |
+| Manufacturer | `Radica Games, Ltd` |
+| Product | `MegaByte Portal` |
 | Configuration | 1 |
 
 For the published remake, replace the temporary test VID/PID in `src/funkey_protocol.hpp`

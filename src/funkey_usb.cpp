@@ -53,8 +53,8 @@ static const char s_lang_id_descriptor[] = {0x09, 0x04};
 
 static const char *s_string_descriptor[] = {
     s_lang_id_descriptor,
-    "Funkey Revival",
-    "Funkey Shifter Portal",
+    "Radica Games, Ltd",
+    "MegaByte Portal",
 };
 
 static const uint8_t s_config_descriptor[] = {
