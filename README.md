@@ -1,6 +1,6 @@
-# 🎮 [FunkeyShifter](https://funkeyshifter.jlynx.workers.dev/)
+# 🎮 [FunkeyShifter](https://funkey.jlynx.net/)
 
-[![FunkeyShifter Live](https://img.shields.io/badge/Live-funkeyshifter.jlynx.workers.dev-success?style=for-the-badge&logo=cloudflare)](https://funkeyshifter.jlynx.workers.dev/)
+[![FunkeyShifter Live](https://img.shields.io/badge/Live-funkey.jlynx.net-success?style=for-the-badge&logo=cloudflare)](https://funkey.jlynx.net/)
 [![ESP32-S3](https://img.shields.io/badge/ESP32--S3-Firmware-red?style=for-the-badge&logo=espressif)](docs/toolchain.md)
 [![Web Bluetooth](https://img.shields.io/badge/Web%20Bluetooth-Controller-blue?style=for-the-badge&logo=bluetooth)](docs/usb-protocol.md)
 
@@ -28,7 +28,7 @@ state to the game.
 
 1. Flash the current firmware to the ESP32-S3.
 2. Plug the ESP32 into the computer running the game.
-3. Open [funkeyshifter.jlynx.workers.dev](https://funkeyshifter.jlynx.workers.dev/)
+3. Open [funkeyshifter.jlynx.workers.dev](https://funkey.jlynx.net/)
    in Chrome or Edge.
 4. Click `Connect BLE`.
 5. Select `FunkeyShifter` from the browser Bluetooth picker.
