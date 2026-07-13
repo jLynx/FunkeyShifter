@@ -30,7 +30,7 @@ state to the game.
 
 1. Flash the current firmware to the ESP32-S3.
 2. Plug the ESP32 into the computer running the game.
-3. Open [funkeyshifter.jlynx.workers.dev](https://funkey.jlynx.net/)
+3. Open [funkey.jlynx.net](https://funkey.jlynx.net/)
    in Chrome or Edge.
 4. Click `Connect BLE`.
 5. Select `FunkeyShifter` from the browser Bluetooth picker.
