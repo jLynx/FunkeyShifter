@@ -24,6 +24,8 @@ and serves it to the game on the USB endpoint. Removing a Funkey works the same
 way: the website sends a remove command, and the ESP32 reports the no-figure
 state to the game.
 
+<img width="750" height="706" alt="image" src="https://github.com/user-attachments/assets/254dffbf-a7ed-4960-ac71-ff250f49d3dc" />
+
 ## Using The Website
 
 1. Flash the current firmware to the ESP32-S3.
